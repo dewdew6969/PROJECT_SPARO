@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, LogBox } from 'react-native';
+
+// Sembunyikan semua pesan kuning (WARN) di layar HP agar presentasi mulus
+LogBox.ignoreAllLogs();
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';

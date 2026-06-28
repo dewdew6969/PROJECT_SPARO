@@ -91,6 +91,14 @@ class Tournament(Base):
     max_participants = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TournamentRegistration(Base):
+    __tablename__ = "tournament_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id"))
+    username = Column(String(255))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Post(Base):
     __tablename__ = "posts"
 

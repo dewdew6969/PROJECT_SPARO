@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import SplashScreen from '../screens/auth/SplashScreen';
 import AuthNavigator from './AuthNavigator';
 import MainTabNavigator from './MainTabNavigator';
-import SplashScreen from '../screens/auth/SplashScreen';
 
+import ChatListScreen from '../screens/main/ChatListScreen';
+import ChatScreen from '../screens/main/ChatScreen';
 import CreateChallengeScreen from '../screens/main/CreateChallengeScreen';
 import CreateTournamentScreen from '../screens/main/CreateTournamentScreen';
-import OpponentProfileScreen from '../screens/main/OpponentProfileScreen';
-import ChatScreen from '../screens/main/ChatScreen';
-import VenueMapScreen from '../screens/main/VenueMapScreen';
 import MatchVerificationScreen from '../screens/main/MatchVerificationScreen';
-import ChatListScreen from '../screens/main/ChatListScreen';
+import OpponentProfileScreen from '../screens/main/OpponentProfileScreen';
+import VenueMapScreen from '../screens/main/VenueMapScreen';
 
 const Stack = createStackNavigator();
 

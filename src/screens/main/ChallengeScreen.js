@@ -28,23 +28,43 @@ export default function ChallengeScreen() {
       if (response.ok) {
         const data = await response.json();
         
-        // Format data
-        const formattedData = data.map(match => {
-          const isChallenger = match.challenger_id === profile.id;
-          const enemy = isChallenger ? match.opponent : match.challenger;
-          const name = enemy ? (enemy.full_name || enemy.username) : 'Unknown Player';
-          const dateStr = new Date(match.match_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        // Format data with async mapping to get enemy names
+        const formattedData = await Promise.all(data.map(async match => {
+          // Support both new backend (challenger_id) and old backend (sender_username)
+          const isChallenger = match.challenger_id === profile.id || match.sender_username === profile.username;
+          const enemyId = isChallenger ? match.opponent_id : match.challenger_id;
+          const enemyUsername = isChallenger ? match.receiver_username : match.sender_username;
+          
+          let name = 'Unknown Player';
+
+          try {
+            if (enemyId) {
+              const userRes = await fetch(`${API_URL}/users/${enemyId}`);
+              if (userRes.ok) {
+                const userData = await userRes.json();
+                name = userData.full_name || userData.username || name;
+              }
+            }
+            // Fallback to raw username if ID is missing (old backend schema)
+            if (name === 'Unknown Player' && enemyUsername) {
+              name = enemyUsername;
+            }
+          } catch (e) {
+            console.error('Failed to fetch enemy name', e);
+          }
+          
+          const dateStr = new Date(match.match_date || match.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
           
           return {
             id: match.id,
             name: name,
             sport: match.sport + (match.is_competitive ? ' • Competitive' : ' • Friendly'),
             date: dateStr,
-            venue: match.venue_name,
-            status: match.status,
+            venue: match.venue_name || match.location,
+            status: match.status ? match.status.toLowerCase() : 'pending',
             isIncoming: !isChallenger
           };
-        });
+        }));
 
         setPendingMatches(formattedData.filter(m => m.status === 'pending' && m.isIncoming));
         setAcceptedMatches(formattedData.filter(m => m.status === 'accepted' || (m.status === 'pending' && !m.isIncoming)));

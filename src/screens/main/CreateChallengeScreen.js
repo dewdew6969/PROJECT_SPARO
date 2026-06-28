@@ -90,7 +90,7 @@ export default function CreateChallengeScreen({ navigation, route }) {
         if (Platform.OS === 'android') {
           import('react-native').then(({ ToastAndroid }) => ToastAndroid.show(t('challenge_sent') || 'Challenge Sent!', ToastAndroid.SHORT));
         }
-        navigation.navigate('Main');
+        navigation.navigate('Main', { screen: 'Matches' });
       } else {
         console.error('Failed to send challenge');
       }
@@ -184,7 +184,7 @@ export default function CreateChallengeScreen({ navigation, route }) {
                   style={[styles.sportBtn, activeSport === sport && styles.sportBtnActive]}
                   onPress={() => setActiveSport(sport)}
                 >
-                  <Text style={[styles.sportText, activeSport === sport && styles.sportTextActive]}>{sport}</Text>
+                  <Text style={[styles.sportText, activeSport === sport && styles.sportTextActive]}>{sport.toUpperCase()}</Text>
                 </TouchableOpacity>
               ))}
             </View>

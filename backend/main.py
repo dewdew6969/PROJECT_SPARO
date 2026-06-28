@@ -271,8 +271,13 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     return db_user
 
 @app.get("/opponents/", response_model=List[schemas.User])
-def get_opponents(skip: int = 0, limit: int = 100, lat: float = None, lon: float = None, max_distance: float = None, db: Session = Depends(get_db)):
-    users = db.query(models.User).offset(skip).limit(limit).all()
+def get_opponents(skip: int = 0, limit: int = 100, lat: float = None, lon: float = None, max_distance: float = None, level: str = None, db: Session = Depends(get_db)):
+    query = db.query(models.User)
+    
+    if level and level.lower() != 'all' and level.lower() != 'any':
+        query = query.filter(models.User.primary_level == level.upper())
+        
+    users = query.offset(skip).limit(limit).all()
     result = []
     for user in users:
         user_dict = {c.name: getattr(user, c.name) for c in user.__table__.columns}
@@ -285,6 +290,9 @@ def get_opponents(skip: int = 0, limit: int = 100, lat: float = None, lon: float
         else:
             user_dict['distance'] = None
         result.append(user_dict)
+    
+    # Sort result by distance if available, otherwise by elo
+    result.sort(key=lambda x: (x['distance'] is None, x['distance'], -x.get('elo', 0)))
     return result
 
 @app.post("/challenges/", response_model=schemas.Challenge)
@@ -669,3 +677,61 @@ def update_push_token(user_id: int, token_data: schemas.PushTokenUpdate, db: Ses
     user.expo_push_token = token_data.expo_push_token
     db.commit()
     return {"message": "Push token updated successfully"}
+
+# --- TOURNAMENTS ---
+
+@app.get("/tournaments/", response_model=List[schemas.Tournament])
+def read_tournaments(db: Session = Depends(get_db)):
+    return db.query(models.Tournament).order_by(models.Tournament.date.asc()).all()
+
+@app.post("/tournaments/", response_model=schemas.Tournament)
+def create_tournament(tournament: schemas.TournamentCreate, db: Session = Depends(get_db)):
+    db_tournament = models.Tournament(**tournament.dict())
+    db.add(db_tournament)
+    db.commit()
+    db.refresh(db_tournament)
+    return db_tournament
+
+@app.delete("/tournaments/{tournament_id}")
+def delete_tournament(tournament_id: int, db: Session = Depends(get_db)):
+    db_tournament = db.query(models.Tournament).filter(models.Tournament.id == tournament_id).first()
+    if not db_tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    db.delete(db_tournament)
+    db.commit()
+    return {"message": "Tournament deleted successfully"}
+
+@app.post("/tournaments/{tournament_id}/register")
+def register_tournament(tournament_id: int, username: str, db: Session = Depends(get_db)):
+    db_tournament = db.query(models.Tournament).filter(models.Tournament.id == tournament_id).first()
+    if not db_tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    # Check if already registered
+    existing_reg = db.query(models.TournamentRegistration).filter(
+        models.TournamentRegistration.tournament_id == tournament_id,
+        models.TournamentRegistration.username == username
+    ).first()
+    
+    if existing_reg:
+        raise HTTPException(status_code=400, detail="User already registered")
+
+    if db_tournament.max_participants > 0:
+        db_tournament.max_participants -= 1
+        
+        new_reg = models.TournamentRegistration(
+            tournament_id=tournament_id,
+            username=username
+        )
+        db.add(new_reg)
+        db.commit()
+        db.refresh(db_tournament)
+        
+    return db_tournament
+
+@app.get("/tournaments/registered/{username}")
+def get_registered_tournaments(username: str, db: Session = Depends(get_db)):
+    registrations = db.query(models.TournamentRegistration).filter(
+        models.TournamentRegistration.username == username
+    ).all()
+    return [reg.tournament_id for reg in registrations]

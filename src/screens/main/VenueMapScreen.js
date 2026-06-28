@@ -135,13 +135,7 @@ export default function VenueMapScreen({ navigation, route }) {
 
     // 2. Jika tidak ada suggestion, cari secara manual dengan Photon API (tetap dilimit sesuai lokasi sekitar user)
     try {
-      const minLon = currentRegion.longitude - 0.5;
-      const minLat = currentRegion.latitude - 0.5;
-      const maxLon = currentRegion.longitude + 0.5;
-      const maxLat = currentRegion.latitude + 0.5;
-      const bbox = `${minLon},${minLat},${maxLon},${maxLat}`;
-
-      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=1&bbox=${bbox}`, {
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=1`, {
         headers: { 'User-Agent': 'SparoApp/1.0' }
       });
       const data = await res.json();
@@ -191,15 +185,9 @@ export default function VenueMapScreen({ navigation, route }) {
     if (text.trim().length > 2) {
       searchTimeout.current = setTimeout(async () => {
         try {
-          // Batasi area pencarian sekitar 15-20km dari lokasi yang sedang dilihat/dipilih
-          const minLon = currentRegion.longitude - 0.15;
-          const minLat = currentRegion.latitude - 0.15;
-          const maxLon = currentRegion.longitude + 0.15;
-          const maxLat = currentRegion.latitude + 0.15;
-          const bbox = `${minLon},${minLat},${maxLon},${maxLat}`;
-
-          // Menggunakan Photon API (berbasis OSM) dengan parameter bbox untuk membatasi lokasi pencarian
-          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=15&bbox=${bbox}`, {
+          // Menggunakan Photon API tanpa bbox kaku agar hasil rekomendasi jauh lebih banyak
+          // namun tetap diprioritaskan (di-sorting) berdasarkan jarak terdekat (lat/lon)
+          const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=25`, {
             headers: { 'User-Agent': 'SparoApp/1.0' }
           });
           const data = await res.json();

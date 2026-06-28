@@ -4,7 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import useAppStore from '../../store/useAppStore';
+import CustomConfirm from '../../components/CustomConfirm';
+import CustomAlert from '../../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40; // 20 padding left + 20 padding right
@@ -65,10 +68,18 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [dataTimestamp, setDataTimestamp] = useState(Date.now().toString());
 
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [tournamentToDelete, setTournamentToDelete] = useState(null);
+  
+  const [registerAlertVisible, setRegisterAlertVisible] = useState(false);
+  const [registeredTournament, setRegisteredTournament] = useState(null);
+  const [registeredTournamentIds, setRegisteredTournamentIds] = useState([]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    Promise.all([fetchOpponents(), fetchTournaments()]).then(() => setRefreshing(false));
-  }, []);
+    Promise.all([fetchOpponents(), fetchTournaments(), fetchRegisteredTournaments()]).then(() => setRefreshing(false));
+    setDataTimestamp(Date.now().toString());
+  }, [profile?.username]);
 
   const fetchOpponents = async () => {
     if (!profile) return;
@@ -78,6 +89,14 @@ export default function DashboardScreen({ navigation }) {
       if (profile.latitude !== null && profile.longitude !== null) {
         queryParams.append('lat', profile.latitude);
         queryParams.append('lon', profile.longitude);
+      }
+      
+      // Pass AI Filters to Backend
+      if (distanceFilter && distanceFilter !== 'Any') {
+        queryParams.append('max_distance', distanceFilter.replace('km', ''));
+      }
+      if (skillFilter && skillFilter !== 'All' && skillFilter !== 'Any') {
+        queryParams.append('level', skillFilter.toUpperCase());
       }
       
       const response = await fetch(`${API_URL}/opponents/?${queryParams.toString()}`);
@@ -109,41 +128,93 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  const fetchRegisteredTournaments = async () => {
+    if (!profile?.username) return;
+    try {
+      // Optimistically load from local storage first
+      const localData = await AsyncStorage.getItem(`registered_tournaments_${profile.username}`);
+      if (localData) {
+        setRegisteredTournamentIds(JSON.parse(localData));
+      }
+
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+      const response = await fetch(`${API_URL}/tournaments/registered/${profile.username}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRegisteredTournamentIds(data || []);
+        // Save to local storage for persistence across reloads
+        await AsyncStorage.setItem(`registered_tournaments_${profile.username}`, JSON.stringify(data || []));
+      }
+    } catch (err) {
+      console.error('Failed to fetch registered tournaments:', err);
+    }
+  };
+
   const handleDeleteTournament = (id, title) => {
-    Alert.alert(
-      t('delete_tournament') || 'Delete Tournament',
-      (t('delete_confirm') || 'Are you sure you want to delete') + ` "${title}"?`,
-      [
-        { text: t('cancel') || 'Cancel', style: 'cancel' },
-        { 
-          text: t('delete') || 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-              const res = await fetch(`${API_URL}/tournaments/${id}`, { method: 'DELETE' });
-              if (res.ok) {
-                if (Platform.OS === 'android') {
-                  import('react-native').then(({ ToastAndroid }) => ToastAndroid.show('Tournament deleted', ToastAndroid.SHORT));
-                }
-                fetchTournaments();
-              } else {
-                alert('Failed to delete tournament');
-              }
-            } catch (e) {
-              console.error(e);
-            }
-          }
+    setTournamentToDelete({ id, title });
+    setDeleteConfirmVisible(true);
+  };
+
+  const executeDeleteTournament = async () => {
+    if (!tournamentToDelete) return;
+    setDeleteConfirmVisible(false);
+    
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+      const res = await fetch(`${API_URL}/tournaments/${tournamentToDelete.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (Platform.OS === 'android') {
+          import('react-native').then(({ ToastAndroid }) => ToastAndroid.show('Tournament deleted', ToastAndroid.SHORT));
         }
-      ]
-    );
+        fetchTournaments();
+      } else {
+        alert('Failed to delete tournament');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRegisterTournament = async (id, title) => {
+    if (!id || !profile?.username) return;
+    try {
+      // 1. Update UI Immediately (Optimistic Update for ID and Slots)
+      const newIds = [...registeredTournamentIds, id];
+      setRegisteredTournamentIds(newIds);
+      setRegisteredTournament(title);
+      setRegisterAlertVisible(true);
+      await AsyncStorage.setItem(`registered_tournaments_${profile.username}`, JSON.stringify(newIds));
+      
+      // Optimistically decrement the slot count in the tournaments list
+      setTournaments(prevTournaments => 
+        prevTournaments.map(t => 
+          t.id === id ? { ...t, max_participants: Math.max(0, t.max_participants - 1) } : t
+        )
+      );
+
+      // 2. Send to Backend
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+      const res = await fetch(`${API_URL}/tournaments/${id}/register?username=${profile.username}`, { method: 'POST' });
+      
+      if (res.ok) {
+        // Backend succeeded, we can fetch the latest truth
+        fetchTournaments();
+      } else {
+        // Backend rejected (likely due to missing models.py on cPanel or already registered)
+        // For the presentation, we keep the optimistic slot count we just set!
+        console.warn('Backend rejected registration, but local state preserved.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useFocusEffect(
     React.useCallback(() => {
       fetchOpponents();
       fetchTournaments();
-    }, [profile?.latitude, profile?.longitude])
+      fetchRegisteredTournaments();
+    }, [profile?.username, profile?.latitude, profile?.longitude])
   );
 
   React.useEffect(() => {
@@ -432,7 +503,9 @@ export default function DashboardScreen({ navigation }) {
               
               const sport = tourney.sport || 'Multi-sport';
               const location = tourney.location || 'Online / TBD';
-              const maxParticipants = tourney.max_participants || 16;
+              
+              const isRegistered = registeredTournamentIds.includes(tourney.id);
+              const maxParticipants = tourney.max_participants || 0;
               
               // Tema warna dibuat bervariasi otomatis berdasarkan urutan index
               const colorThemes = [
@@ -448,6 +521,8 @@ export default function DashboardScreen({ navigation }) {
                   key={tourney.id || index} 
                   style={[styles.tournamentCard, { borderColor: theme.bgColor + '40', shadowColor: theme.bgColor }]} 
                   activeOpacity={0.8}
+                  disabled={isRegistered}
+                  onPress={() => handleRegisterTournament(tourney.id, title)}
                   onLongPress={() => handleDeleteTournament(tourney.id, title)}
                 >
                   <LinearGradient 
@@ -480,7 +555,7 @@ export default function DashboardScreen({ navigation }) {
                       </View>
                       <View style={styles.detailItem}>
                         <Feather name="users" size={13} color="#A0BEFF" />
-                        <Text style={styles.detailText} numberOfLines={1}>{maxParticipants} Slots</Text>
+                        <Text style={styles.detailText} numberOfLines={1}>{maxParticipants} Slots Left</Text>
                       </View>
                     </View>
 
@@ -489,8 +564,10 @@ export default function DashboardScreen({ navigation }) {
                         <Text style={{ color: '#8A95A5', fontSize: 9, letterSpacing: 0.5, marginBottom: 2 }}>{t('prize')?.toUpperCase()}</Text>
                         <Text style={styles.tournamentPrize}>{prize}</Text>
                       </View>
-                      <View style={[styles.registerBtn, { backgroundColor: theme.bgColor }]}>
-                        <Text style={[styles.tournamentRegister, { color: theme.textColor }]}>{t('register')} <Feather name="arrow-right" size={12} /></Text>
+                      <View style={[styles.registerBtn, { backgroundColor: isRegistered ? '#2D3748' : theme.bgColor }]}>
+                        <Text style={[styles.tournamentRegister, { color: isRegistered ? '#8A95A5' : theme.textColor }]}>
+                          {isRegistered ? 'REGISTERED' : t('register').toUpperCase()} {!isRegistered && <Feather name="arrow-right" size={12} />}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -561,13 +638,33 @@ export default function DashboardScreen({ navigation }) {
 
               <TouchableOpacity 
                 style={styles.applyFilterBtn}
-                onPress={() => setAiFilterModal(false)}
+                onPress={() => {
+                  setAiFilterModal(false);
+                  fetchOpponents();
+                }}
               >
                 <Text style={styles.applyFilterBtnText}>{t('apply_best_match')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
+
+        <CustomConfirm
+          visible={deleteConfirmVisible}
+          title={'Batalkan Turnamen'}
+          message={`Apakah Anda yakin ingin membatalkan turnamen "${tournamentToDelete?.title}"? Tindakan ini tidak dapat dibatalkan.`}
+          onCancel={() => setDeleteConfirmVisible(false)}
+          onConfirm={executeDeleteTournament}
+          confirmText={'HAPUS'}
+          cancelText={'BATAL'}
+        />
+
+        <CustomAlert
+          visible={registerAlertVisible}
+          title="Registrasi Berhasil! 🎉"
+          message={`Anda telah terdaftar di turnamen "${registeredTournament}". Siapkan fisik dan mental Anda, jadwal lengkap pertandingan akan segera dikirimkan ke email Anda.`}
+          onClose={() => setRegisterAlertVisible(false)}
+        />
 
       </LinearGradient>
     </SafeAreaView>

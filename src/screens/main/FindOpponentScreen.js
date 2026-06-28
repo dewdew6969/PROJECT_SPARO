@@ -38,6 +38,8 @@ const SkeletonCard = () => {
 export default function FindOpponentScreen({ navigation }) {
   const { profile, t, language } = useAppStore();
 
+  if (!profile) return null;
+
   const userElo = profile.elo || 1500;
   const [isLoading, setIsLoading] = useState(true);
   const [opponents, setOpponents] = useState([]);
