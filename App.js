@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
 import React, { useEffect } from 'react';
 import { AppState, LogBox } from 'react-native';
 
