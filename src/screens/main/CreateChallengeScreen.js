@@ -70,7 +70,7 @@ export default function CreateChallengeScreen({ navigation, route }) {
     setIsSending(true);
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${API_URL}/challenges/?challenger_id=${profile.id}`, {
+      const response = await fetch(`${API_URL}/challenges/?challenger_id=${profile?.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json' },

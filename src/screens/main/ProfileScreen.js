@@ -248,8 +248,8 @@ export default function ProfileScreen({ navigation }) {
     
     // Sync with backend API (Production Logic)
     const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-    if (profile.id) {
-      fetch(`${API_URL}/users/${profile.id}`, {
+    if (profile?.id) {
+        fetch(`${API_URL}/users/${profile?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -290,10 +290,10 @@ export default function ProfileScreen({ navigation }) {
     
     // Sync avatar to backend
     const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-    if (profile.id) {
+    if (profile?.id) {
       if (url.startsWith('http')) {
         // If preset avatar (pravatar etc), just update the string in DB
-        fetch(`${API_URL}/users/${profile.id}`, {
+        fetch(`${API_URL}/users/${profile?.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ avatar: url })
@@ -310,7 +310,7 @@ export default function ProfileScreen({ navigation }) {
         
         formData.append('file', { uri: url, name: filename, type });
         
-        fetch(`${API_URL}/users/${profile.id}/avatar`, {
+        fetch(`${API_URL}/users/${profile?.id}/avatar`, {
           method: 'POST',
           body: formData
         })

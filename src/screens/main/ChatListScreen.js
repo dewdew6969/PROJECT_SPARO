@@ -59,7 +59,7 @@ export default function ChatListScreen({ navigation }) {
     if (!profile) return;
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${apiUrl}/chats/${profile.id}?t=${Date.now()}`);
+      const response = await fetch(`${apiUrl}/chats/${profile?.id}?t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         setChatList(data);
@@ -109,7 +109,7 @@ export default function ChatListScreen({ navigation }) {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
       // Hapus satu persatu berdasarkan opponent_id
       for (const opponentId of selectedChats) {
-        await fetch(`${apiUrl}/chats/${profile.id}/${opponentId}`, {
+        await fetch(`${apiUrl}/chats/${profile?.id}/${opponentId}`, {
           method: 'DELETE' });
       }
       setSelectedChats([]);

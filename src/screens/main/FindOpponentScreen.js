@@ -130,7 +130,7 @@ export default function FindOpponentScreen({ navigation }) {
         
         // Map backend User data to Frontend Opponent format
         if (isMounted) {
-          const mappedOpponents = data.filter(u => u.id !== profile.id).map(u => {
+          const mappedOpponents = data.filter(u => u.id !== profile?.id).map(u => {
             let finalAvatar = u.avatar || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
             // Perbaiki URL lokal menjadi URL publik dinamis
             if (finalAvatar && finalAvatar !== 'null' && !finalAvatar.includes('gravatar.com') && !finalAvatar.startsWith('file://') && !finalAvatar.startsWith('content://')) {

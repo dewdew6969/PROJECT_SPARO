@@ -93,11 +93,11 @@ export default function ChatScreen({ navigation, route }) {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
         
         // Fetch Messages
-        const msgResponse = await fetch(`${apiUrl}/messages/${profile.id}/${currentOpponent.id}?t=${Date.now()}`);
+        const msgResponse = await fetch(`${apiUrl}/messages/${profile?.id}/${currentOpponent.id}?t=${Date.now()}`);
         if (msgResponse.ok) {
           const data = await msgResponse.json();
           const formattedMessages = data.map(msg => {
-            const isFromMe = String(msg.sender_id) === String(profile.id);
+            const isFromMe = String(msg.sender_id) === String(profile?.id);
             return {
               id: String(msg.id),
               text: msg.text,
@@ -168,7 +168,7 @@ export default function ChatScreen({ navigation, route }) {
 
     const payload = {
       receiver_id: currentOpponent.id,
-      sender_id: profile.id, // HTTP needs sender_id
+      sender_id: profile?.id, // HTTP needs sender_id
       text: inputText
     };
 

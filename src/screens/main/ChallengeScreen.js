@@ -27,7 +27,7 @@ export default function ChallengeScreen() {
     if (!profile?.id) return;
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${API_URL}/challenges/${profile.id}`);
+      const response = await fetch(`${API_URL}/challenges/${profile?.id}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -176,7 +176,7 @@ export default function ChallengeScreen() {
         });
       }
       
-      const response = await fetch(`${API_URL}/challenges/${selectedMatchId}/submit-score?user_id=${profile.id}&my_score=${myScore}&opponent_score=${opponentScore}`, {
+      const response = await fetch(`${API_URL}/challenges/${selectedMatchId}/submit-score?user_id=${profile?.id}&my_score=${myScore}&opponent_score=${opponentScore}`, {
         method: 'POST',
       });
       

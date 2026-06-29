@@ -78,7 +78,7 @@ export default function DashboardScreen({ navigation }) {
     if (!profile) return;
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${API_URL}/chats/${profile.id}?t=${Date.now()}`);
+      const response = await fetch(`${API_URL}/chats/${profile?.id}?t=${Date.now()}`);
       if (response.ok) {
         const chats = await response.json();
         const hasUnread = chats.some(chat => chat.unread_count > 0);
@@ -116,7 +116,7 @@ export default function DashboardScreen({ navigation }) {
       if (response.ok) {
          const data = await response.json();
          // Filter diri sendiri
-         setOpponents(data.filter(u => u.id !== profile.id));
+         setOpponents(data.filter(u => u.id !== profile?.id));
          setDataTimestamp(Date.now().toString()); // Update timestamp to bypass image cache
       }
     } catch (err) {

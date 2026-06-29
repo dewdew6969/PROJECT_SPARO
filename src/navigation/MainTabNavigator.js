@@ -33,7 +33,7 @@ export default function MainTabNavigator() {
       if (!profile?.id) return;
       try {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-        await fetch(`${apiUrl}/users/${profile.id}/status?is_online=${isOnline}`, { method: 'PUT' });
+        await fetch(`${apiUrl}/users/${profile?.id}/status?is_online=${isOnline}`, { method: 'PUT' });
       } catch (e) {
         // ignore network error
       }
@@ -43,7 +43,7 @@ export default function MainTabNavigator() {
       if (!profile?.id) return;
       try {
         const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-        await fetch(`${apiUrl}/messages/${profile.id}/delivered`, { method: 'PUT' });
+        await fetch(`${apiUrl}/messages/${profile?.id}/delivered`, { method: 'PUT' });
       } catch (e) {
         // ignore network error
       }
