@@ -4,7 +4,7 @@
     "slug": "sparo",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo-sparo.png",
     "scheme": "sparo",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -18,9 +18,9 @@
         }
       },
       "adaptiveIcon": {
-        "backgroundColor": "#0F1522",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/images/logo-sparo.png",
+        "monochromeImage": "./assets/images/logo-sparo.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize"
@@ -33,10 +33,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F1522",
+          "backgroundColor": "#000000",
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 150
+            "image": "./assets/images/icon.png",
+            "imageWidth": 250
           }
         }
       ],

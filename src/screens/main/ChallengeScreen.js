@@ -4,11 +4,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusB
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import useAppStore from '../../store/useAppStore';
 
 export default function ChallengeScreen() {
-  const { t, profile } = useAppStore();
+  const { t, profile, setHasNewMatches } = useAppStore();
 
   
   const [activeTab, setActiveTab] = useState('pending');
@@ -26,8 +27,19 @@ export default function ChallengeScreen() {
   const fetchChallenges = async () => {
     if (!profile?.id) return;
     try {
+      const cacheKey = `challenges_${profile.id}`;
+      // 1. FAST CACHE LOAD (Optimistic UI)
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+         const parsed = JSON.parse(cached);
+         setPendingMatches(parsed.pending || []);
+         setAcceptedMatches(parsed.accepted || []);
+         setCompletedMatches(parsed.completed || []);
+         setIsLoading(false); // Stop loading immediately
+      }
+
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${API_URL}/challenges/${profile?.id}`);
+      const response = await fetch(`${API_URL}/challenges/${profile?.id}?t=${new Date().getTime()}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -78,9 +90,20 @@ export default function ChallengeScreen() {
           };
         }));
 
-        setPendingMatches(formattedData.filter(m => m.status === 'pending' && m.isIncoming));
-        setAcceptedMatches(formattedData.filter(m => m.status === 'accepted' || (m.status === 'pending' && !m.isIncoming)));
-        setCompletedMatches(formattedData.filter(m => m.status === 'completed' || m.status === 'rejected'));
+        const newPending = formattedData.filter(m => m.status === 'pending' && m.isIncoming);
+        const newAccepted = formattedData.filter(m => m.status === 'accepted' || (m.status === 'pending' && !m.isIncoming));
+        const newCompleted = formattedData.filter(m => m.status === 'completed' || m.status === 'rejected');
+
+        setPendingMatches(newPending);
+        setAcceptedMatches(newAccepted);
+        setCompletedMatches(newCompleted);
+
+        // 2. SAVE LATEST TO CACHE (Silent Update)
+        await AsyncStorage.setItem(cacheKey, JSON.stringify({
+          pending: newPending,
+          accepted: newAccepted,
+          completed: newCompleted
+        }));
       }
     } catch (err) {
       console.error(err);
@@ -89,20 +112,16 @@ export default function ChallengeScreen() {
     }
   };
 
-  React.useEffect(() => {
-    fetchChallenges();
-    
-    // Polling setiap 2 detik agar BENAR-BENAR realtime
-    const intervalId = setInterval(() => {
-        fetchChallenges();
-    }, 2000);
-    
-    return () => clearInterval(intervalId);
-  }, [profile?.id]);
-
   useFocusEffect(
     React.useCallback(() => {
       fetchChallenges();
+      
+      // Polling hanya berjalan saat tab Matches sedang dibuka/fokus
+      const intervalId = setInterval(() => {
+        fetchChallenges();
+      }, 15000);
+      
+      return () => clearInterval(intervalId);
     }, [profile?.id])
   );
 

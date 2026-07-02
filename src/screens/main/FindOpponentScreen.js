@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Platform, StatusBar, Modal, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import useAppStore from '../../store/useAppStore';
 import { Image } from 'expo-image';
 
@@ -98,10 +99,20 @@ export default function FindOpponentScreen({ navigation }) {
   // Fetch opponents from backend or fallback to mock
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
     
     const fetchOpponents = async () => {
       try {
+        const cacheKey = `find_opponents_${profile?.id}_${activeSport}_${appliedDistance}_${appliedMinElo}`;
+        
+        // 1. FAST CACHE LOAD (Optimistic UI)
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached && isMounted) {
+           setOpponents(JSON.parse(cached));
+           // Jangan block UI dengan loader jika cache sudah ada!
+        } else {
+           setIsLoading(true);
+        }
+
         const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
         let url = `${API_URL}/opponents/`;
         const params = new URLSearchParams();
@@ -117,7 +128,7 @@ export default function FindOpponentScreen({ navigation }) {
           params.append('max_distance', appliedDistance);
         }
         
-        params.append('t', Date.now()); // Prevent caching
+        params.append('t', Date.now()); // Prevent caching at network level
         
         if (params.toString()) {
           url += '?' + params.toString();
@@ -159,13 +170,15 @@ export default function FindOpponentScreen({ navigation }) {
           
           if (mappedOpponents.length > 0) {
              setOpponents(mappedOpponents);
+             await AsyncStorage.setItem(cacheKey, JSON.stringify(mappedOpponents)); // Save to cache
           } else {
              setOpponents([]);
+             await AsyncStorage.removeItem(cacheKey);
           }
         }
       } catch (error) {
         console.log("Failed to fetch from backend:", error);
-        if (isMounted) {
+        if (isMounted && opponents.length === 0) {
           setOpponents([]);
         }
       } finally {
@@ -372,7 +385,12 @@ export default function FindOpponentScreen({ navigation }) {
                 <View style={styles.cardTop}>
                   
                   <View style={styles.avatarContainer}>
-                    <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
+                    <Image 
+                      source={{ uri: item.avatar }} 
+                      style={styles.avatarImage} 
+                      cachePolicy="memory-disk"
+                      transition={0}
+                    />
                     {item.isPro && (
                       <View style={styles.proBadge}>
                         <Text style={styles.proBadgeText}>PRO</Text>

@@ -90,7 +90,8 @@ export default function CreateChallengeScreen({ navigation, route }) {
         if (Platform.OS === 'android') {
           import('react-native').then(({ ToastAndroid }) => ToastAndroid.show(t('challenge_sent') || 'Challenge Sent!', ToastAndroid.SHORT));
         }
-        navigation.navigate('Main', { screen: 'Matches' });
+        useAppStore.getState().setHasNewMatches(true);
+        navigation.navigate('Main', { screen: 'Home' });
       } else {
         console.error('Failed to send challenge');
       }

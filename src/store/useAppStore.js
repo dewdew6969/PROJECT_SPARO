@@ -508,6 +508,8 @@ const useAppStore = create((set, get) => ({
   // 3. STATE UNTUK PERTANDINGAN (MATCHES)
   // Ini akan digunakan nanti untuk layar Chat atau Opponent
   activeMatches: [],
+  hasNewMatches: false,
+  setHasNewMatches: (val) => set({ hasNewMatches: val }),
   
   addMatch: (match) => set((state) => ({
     activeMatches: [...state.activeMatches, match]

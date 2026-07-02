@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Feather } from '@expo/vector-icons';
-import { Text, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Text, AppState, View } from 'react-native';
 import DashboardScreen from '../screens/main/DashboardScreen';
 import FindOpponentScreen from '../screens/main/FindOpponentScreen';
 import ChallengeScreen from '../screens/main/ChallengeScreen';
@@ -22,7 +23,7 @@ const TabBarLabel = ({ route, color }) => {
 const Tab = createMaterialTopTabNavigator();
 
 export default function MainTabNavigator() {
-  const { t, language, profile } = useAppStore();
+  const { t, language, profile, hasNewMatches, setHasNewMatches } = useAppStore();
   const insets = useSafeAreaInsets();
   const appState = useRef(AppState.currentState);
 
@@ -49,16 +50,31 @@ export default function MainTabNavigator() {
       }
     };
 
+    const checkPendingMatches = async () => {
+      if (!profile?.id) return;
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+        const response = await fetch(`${apiUrl}/challenges/${profile?.id}?t=${new Date().getTime()}`);
+        if (response.ok) {
+          const data = await response.json();
+          const hasPending = data.some(m => m.status && m.status.toLowerCase() === 'pending');
+          setHasNewMatches(hasPending);
+        }
+      } catch (e) {}
+    };
+
     if (profile?.id) {
       // Saat aplikasi baru dibuka (mounting), set online
       updateOnlineStatus(true);
       markDelivered();
+      checkPendingMatches();
       
       // Heartbeat setiap 5 detik saat aktif (membantu mendeteksi jika crash/hilang koneksi)
       intervalId = setInterval(() => {
         if (appState.current === 'active') {
           updateOnlineStatus(true);
           markDelivered();
+          checkPendingMatches();
         }
       }, 5000);
     }
@@ -98,7 +114,24 @@ export default function MainTabNavigator() {
           else if (route.name === 'Leaderboard') iconName = 'bar-chart-2';
           else if (route.name === 'Profile') iconName = 'user';
           
-          return <Feather name={iconName} size={24} color={color} />;
+          return (
+            <View>
+              <Feather name={iconName} size={24} color={color} />
+              {route.name === 'Matches' && hasNewMatches && (
+                <View style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -4,
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: '#D4FF00', // warna hijau terang Sparo
+                  borderWidth: 2,
+                  borderColor: '#0F1522' // warna border senada dengan background tab bar
+                }} />
+              )}
+            </View>
+          );
         },
         tabBarActiveTintColor: '#D4FF00',
         tabBarInactiveTintColor: '#8A95A5',

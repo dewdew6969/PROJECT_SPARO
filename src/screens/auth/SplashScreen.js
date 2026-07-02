@@ -39,16 +39,16 @@ export default function SplashScreen({ navigation }) {
   }, [isAuthLoaded, token, profile, navigation, minTimeElapsed]);
 
   return (
-    <LinearGradient colors={['#000000', '#0A0F18']} style={styles.container}>
+    <View style={[styles.container, { backgroundColor: '#000000' }]}>
       <Animated.View style={[styles.centerContainer, { opacity: fadeAnim }]}>
         <Image 
-          source={require('../../../assets/images/sparo-logo.png')} 
+          source={require('../../../assets/images/icon.png')} 
           style={styles.logo}
           resizeMode="contain"
         />
       </Animated.View>
       <ActivityIndicator size="small" color="#D4FF00" style={styles.loader} />
-    </LinearGradient>
+    </View>
   );
 }
 

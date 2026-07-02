@@ -97,6 +97,14 @@ export default function DashboardScreen({ navigation }) {
   const fetchOpponents = async () => {
     if (!profile) return;
     try {
+      // 1. FAST CACHE LOAD (Optimistic UI)
+      const cacheKey = `dash_opponents_${profile.id}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+         setOpponents(JSON.parse(cached));
+         setIsLoadingOpponents(false); // Stop loading immediately!
+      }
+
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
       const queryParams = new URLSearchParams();
       if (profile.latitude !== null && profile.longitude !== null) {
@@ -116,8 +124,11 @@ export default function DashboardScreen({ navigation }) {
       if (response.ok) {
          const data = await response.json();
          // Filter diri sendiri
-         setOpponents(data.filter(u => u.id !== profile?.id));
-         setDataTimestamp(Date.now().toString()); // Update timestamp to bypass image cache
+         const filtered = data.filter(u => u.id !== profile?.id);
+         setOpponents(filtered);
+         
+         // 2. SAVE LATEST TO CACHE (Silent Update)
+         await AsyncStorage.setItem(cacheKey, JSON.stringify(filtered));
       }
     } catch (err) {
       console.error('Failed to fetch opponents:', err);
@@ -325,6 +336,8 @@ export default function DashboardScreen({ navigation }) {
                 <Image 
                   source={{ uri: getAvatarUrl(profile?.avatar) }} 
                   style={styles.avatarImage} 
+                  cachePolicy="memory-disk"
+                  transition={0}
                 />
               </TouchableOpacity>
             </View>
@@ -456,7 +469,12 @@ export default function DashboardScreen({ navigation }) {
                       navigation.navigate('OpponentProfile');
                     }}
                   >
-                    <Image source={{ uri: getAvatarUrl(match.avatar) }} style={styles.aiAvatar} />
+                    <Image 
+                      source={{ uri: getAvatarUrl(match.avatar) }} 
+                      style={styles.aiAvatar} 
+                      cachePolicy="memory-disk"
+                      transition={0}
+                    />
                     <View style={styles.aiMatchDetails}>
                       <Text style={styles.aiMatchName}>{match.full_name || match.username}</Text>
                       <View style={styles.aiMatchBadges}>
