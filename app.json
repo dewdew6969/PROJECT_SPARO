@@ -3,8 +3,9 @@
     "name": "sparo",
     "slug": "sparo",
     "version": "1.0.0",
+    "newArchEnabled": false,
     "orientation": "portrait",
-    "icon": "./assets/images/logo-sparo.png",
+    "icon": "./assets/images/splash-icon.png",
     "scheme": "sparo",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -18,9 +19,9 @@
         }
       },
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/logo-sparo.png",
-        "monochromeImage": "./assets/images/logo-sparo.png"
+        "backgroundColor": "#0F1522",
+        "foregroundImage": "./assets/images/splash-icon.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize"
@@ -33,14 +34,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
+          "backgroundColor": "#0F1522",
           "android": {
-            "image": "./assets/images/icon.png",
-            "imageWidth": 250
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 150
           }
         }
-      ],
-      "@react-native-community/datetimepicker"
+      ]
     ],
     "experiments": {
       "typedRoutes": false,
@@ -48,9 +48,8 @@
     },
     "extra": {
       "eas": {
-        "projectId": "0c0a6460-5979-4a4d-98f4-1cc3ba1db14f"
+        "projectId": "10955bae-87cc-43a3-8be7-93fb6ba15c90"
       }
-    },
-    "owner": "dewapermana"
+    }
   }
 }
