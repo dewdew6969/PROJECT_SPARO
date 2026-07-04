@@ -1,17 +1,17 @@
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
+import { useEffect, useRef } from 'react';
+import { AppState, LogBox, Platform } from 'react-native';
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import React, { useEffect, useRef } from 'react';
-import { AppState, LogBox, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import OfflineIndicator from './src/components/OfflineIndicator';
+import AppNavigator from './src/navigation/AppNavigator';
+import useAppStore from './src/store/useAppStore';
 
 // Sembunyikan semua pesan kuning (WARN) di layar HP agar presentasi mulus
 LogBox.ignoreAllLogs();
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import AppNavigator from './src/navigation/AppNavigator';
-import OfflineIndicator from './src/components/OfflineIndicator';
-import useAppStore from './src/store/useAppStore';
 
 // Configure notification handler for foreground notifications
 Notifications.setNotificationHandler({
@@ -79,14 +79,14 @@ export default function App() {
           fetch('https://sparo.my.id/update_token.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               user_id: profile.id,
-              push_token: token 
+              push_token: token
             })
           })
-          .then(res => res.text())
-          .then(data => console.log('Backend response:', data))
-          .catch(console.error);
+            .then(res => res.text())
+            .then(data => console.log('Backend response:', data))
+            .catch(console.error);
         }
       });
     }
@@ -107,9 +107,9 @@ export default function App() {
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
       if (!profile) return;
-      
+
       const isOnline = nextAppState === 'active';
-      
+
       // Logika untuk mengirim status online ke backend
       try {
         // Asumsi API terhubung, menggunakan endpoint PUT /users/{id}/status yang sudah dibuat
@@ -121,7 +121,7 @@ export default function App() {
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
+
     // Set status online saat pertama kali aplikasi dibuka
     handleAppStateChange('active');
 
