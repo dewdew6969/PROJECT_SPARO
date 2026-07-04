@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "sparo",
+    "slug": "sparo",
+    "version": "1.0.0",
+    "newArchEnabled": false,
+    "orientation": "portrait",
+    "icon": "./assets/images/splash-icon.png",
+    "scheme": "sparo",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon"
+    },
+    "android": {
+      "package": "com.dewapermana.sparo",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDummyKeyHereToPreventStartupCrash"
+        }
+      },
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1522",
+        "foregroundImage": "./assets/images/splash-icon.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F1522",
+          "android": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 150
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "10955bae-87cc-43a3-8be7-93fb6ba15c90"
+      }
+    }
+  }
+}
