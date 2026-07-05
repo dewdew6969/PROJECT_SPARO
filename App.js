@@ -1,6 +1,7 @@
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { AppState, LogBox, Platform } from 'react-native';
 import 'react-native-gesture-handler';
@@ -134,6 +135,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar style="light" backgroundColor="#0F1522" />
       <NavigationContainer theme={SparoTheme}>
         <AppNavigator />
         <OfflineIndicator />
