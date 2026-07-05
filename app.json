@@ -9,7 +9,7 @@
     "scheme": "sparo",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/logo-sparo.png"
+      "icon": "./assets/images/logo-sparo-padded.png"
     },
     "android": {
       "package": "com.dewapermana.sparo",
@@ -33,10 +33,10 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#000000",
-          "image": "./assets/images/icon.png",
+          "image": "./assets/images/logo-sparo-padded.png",
           "android": {
-            "image": "./assets/images/icon.png",
-            "imageWidth": 150
+            "image": "./assets/images/logo-sparo-padded.png",
+            "imageWidth": 200
           }
         }
       ],
