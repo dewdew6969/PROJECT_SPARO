@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "newArchEnabled": true,
     "orientation": "portrait",
-    "icon": "./assets/images/logo-sparo.png",
+    "icon": "./assets/images/icon-padded.png",
     "scheme": "sparo",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -15,7 +15,7 @@
       "package": "com.dewapermana.sparo",
       "adaptiveIcon": {
         "backgroundColor": "#0F1522",
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/icon-padded.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -33,9 +33,9 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0F1522",
-          "image": "./assets/images/icon.png",
+          "image": "./assets/images/icon-padded.png",
           "android": {
-            "image": "./assets/images/icon.png",
+            "image": "./assets/images/icon-padded.png",
             "imageWidth": 150
           }
         }
