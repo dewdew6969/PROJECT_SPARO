@@ -57,6 +57,10 @@ const translations = {
     days: 'Days',
     time: 'Time',
     create_challenge: 'Create Challenge',
+    challenge_sent: 'Challenge Sent!',
+    challenge_sent_desc: 'Your challenge has been successfully sent to ',
+    awesome_btn: 'AWESOME!',
+    sent_btn: 'SENT!',
     select_venue: 'Select Venue',
     date_time: 'Date & Time',
     my_matches: 'My Matches',
@@ -259,6 +263,10 @@ const translations = {
     days: 'Hari',
     time: 'Waktu',
     create_challenge: 'Buat Tantangan',
+    challenge_sent: 'Tantangan Terkirim!',
+    challenge_sent_desc: 'Tantangan Anda telah berhasil dikirim ke ',
+    awesome_btn: 'MANTAP!',
+    sent_btn: 'TERKIRIM!',
     select_venue: 'Pilih Lokasi',
     date_time: 'Tanggal & Waktu',
     my_matches: 'Pertandingan Saya',
@@ -674,6 +682,9 @@ const useAppStore = create((set, get) => ({
   // 5. STATE UNTUK LAWAN YANG SEDANG DIPILIH
   selectedOpponent: null,
   setSelectedOpponent: (opponent) => set({ selectedOpponent: opponent }),
+
+  hasNewMatches: false,
+  setHasNewMatches: (val) => set({ hasNewMatches: val }),
 
   tempVenue: null,
   setTempVenue: (venue) => set({ tempVenue: venue }),

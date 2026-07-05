@@ -1,7 +1,7 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Modal, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -98,6 +98,19 @@ export default function CreateChallengeScreen({ navigation, route }) {
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showLocationError, setShowLocationError] = useState(false);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  const showToast = () => {
+    setShowLocationError(true);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(2500),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true })
+    ]).start(() => {
+      setShowLocationError(false);
+    });
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -111,9 +124,7 @@ export default function CreateChallengeScreen({ navigation, route }) {
 
   const handleSendChallenge = async () => {
     if (!activeVenue) {
-      if (Platform.OS === 'android') {
-        import('react-native').then(({ ToastAndroid }) => ToastAndroid.show(t('pick_location_desc'), ToastAndroid.SHORT));
-      }
+      showToast();
       return;
     }
     
@@ -371,10 +382,20 @@ export default function CreateChallengeScreen({ navigation, route }) {
             disabled={isSending || isSent}
           >
             <Text style={[styles.sendBtnText, isSent && { color: '#D4FF00' }]}>
-              {isSent ? (language === 'Bahasa Indonesia' ? 'TERKIRIM!' : 'SENT!') : (isSending ? 'SENDING...' : t('send_challenge').toUpperCase())}
+              {isSent ? t('sent_btn') : (isSending ? 'SENDING...' : t('send_challenge').toUpperCase())}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Custom Error Toast */}
+        {showLocationError && (
+          <Animated.View style={[styles.errorToast, { opacity: toastOpacity }]}>
+            <Feather name="alert-circle" size={18} color="#0F1522" style={{ marginRight: 8 }} />
+            <Text style={styles.errorToastText}>
+              {language === 'Bahasa Indonesia' ? 'Silakan pilih lokasi (Venue) terlebih dahulu!' : 'Please pick a location (Venue) first!'}
+            </Text>
+          </Animated.View>
+        )}
 
         {/* Success Modal */}
         <Modal visible={showSuccessModal} transparent={true} animationType="fade">
@@ -383,13 +404,13 @@ export default function CreateChallengeScreen({ navigation, route }) {
               <View style={styles.modalIconBox}>
                 <Feather name="check-circle" size={50} color="#D4FF00" />
               </View>
-              <Text style={styles.modalTitle}>{language === 'Bahasa Indonesia' ? 'Tantangan Terkirim!' : 'Challenge Sent!'}</Text>
+              <Text style={styles.modalTitle}>{t('challenge_sent')}</Text>
               <Text style={styles.modalDesc}>
-                {language === 'Bahasa Indonesia' ? 'Tantangan Anda telah berhasil dikirim ke ' : 'Your challenge has been successfully sent to '}
+                {t('challenge_sent_desc')}
                 <Text style={{ color: '#D4FF00', fontWeight: 'bold' }}>{opponent.name}</Text>.
               </Text>
               <TouchableOpacity style={styles.modalBtn} onPress={handleCloseSuccessModal}>
-                <Text style={styles.modalBtnText}>{language === 'Bahasa Indonesia' ? 'MANTAP!' : 'AWESOME!'}</Text>
+                <Text style={styles.modalBtnText}>{t('awesome_btn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -492,5 +513,29 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 24, fontWeight: '900', color: '#FFF', marginBottom: 10, letterSpacing: 1 },
   modalDesc: { fontSize: 14, color: '#8A95A5', textAlign: 'center', lineHeight: 22, marginBottom: 30 },
   modalBtn: { backgroundColor: '#D4FF00', width: '100%', paddingVertical: 15, borderRadius: 12, alignItems: 'center' },
-  modalBtnText: { color: '#0F1522', fontSize: 16, fontWeight: '900', letterSpacing: 1 }
+  modalBtnText: { color: '#0F1522', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+
+  // Error Toast
+  errorToast: {
+    position: 'absolute',
+    bottom: 100,
+    alignSelf: 'center',
+    backgroundColor: '#D4FF00',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#D4FF00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 999,
+  },
+  errorToastText: {
+    color: '#0F1522',
+    fontWeight: 'bold',
+    fontSize: 13,
+  }
 });
