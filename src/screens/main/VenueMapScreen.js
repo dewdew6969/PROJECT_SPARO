@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, ScrollView, Animated } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, ScrollView, Animated, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import MapView from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import useAppStore from '../../store/useAppStore';
 
@@ -11,8 +11,7 @@ const { width, height } = Dimensions.get('window');
 export default function VenueMapScreen({ navigation, route }) {
   const { profile, t, language } = useAppStore();
   
-  // Custom Map Style for Dark Theme
-  const mapRef = useRef(null);
+  const webViewRef = useRef(null);
   const [homeLocation, setHomeLocation] = useState({ latitude: -6.214, longitude: 106.81 });
   const [isDragging, setIsDragging] = useState(false);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
@@ -25,11 +24,73 @@ export default function VenueMapScreen({ navigation, route }) {
     longitudeDelta: 0.01,
   });
   
-  // This simulates reverse geocoding
   const [selectedAddress, setSelectedAddress] = useState('Custom Location');
   const [suggestions, setSuggestions] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
   const searchTimeout = useRef(null);
+
+  // Memoize the HTML so WebView doesn't reload on every state change
+  const leafletHTML = useMemo(() => `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { padding: 0; margin: 0; background-color: #F8F9FA; }
+        html, body, #map { height: 100%; width: 100%; }
+        /* Make attribution light mode */
+        .leaflet-container .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.7);
+            color: #333;
+            font-size: 9px;
+        }
+        .leaflet-container .leaflet-control-attribution a { color: #0F1522; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map', {
+            zoomControl: false,
+            attributionControl: true
+        }).setView([-6.214, 106.81], 15);
+
+        // OpenStreetMap standard light tiles (mirip Google Maps)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19
+        }).addTo(map);
+
+        map.on('movestart', function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'onRegionChange' }));
+        });
+
+        map.on('moveend', function() {
+            var center = map.getCenter();
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'onRegionChangeComplete',
+                latitude: center.lat,
+                longitude: center.lng
+            }));
+        });
+    </script>
+</body>
+</html>
+  `, []);
+
+  const animateToRegion = (region) => {
+    setCurrentRegion(region);
+    if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`
+        if (window.map) {
+          window.map.flyTo([${region.latitude}, ${region.longitude}], 15);
+        }
+        true;
+      `);
+    }
+  };
 
   useEffect(() => {
     const fetchHomeLocation = async () => {
@@ -41,24 +102,22 @@ export default function VenueMapScreen({ navigation, route }) {
             setHomeLocation(loc);
             
             const newRegion = { ...loc, latitudeDelta: 0.05, longitudeDelta: 0.05 };
-            setCurrentRegion(newRegion);
-            if (mapRef.current) {
-              mapRef.current.animateToRegion(newRegion, 1000);
-            }
+            animateToRegion(newRegion);
           }
         }
       } catch (e) {
         console.log("Could not geocode user location", e);
       }
     };
-    fetchHomeLocation();
+    // Wait a brief moment for WebView to load before flying
+    setTimeout(fetchHomeLocation, 1000);
   }, [profile?.location]);
 
   const handleLocateMe = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        alert('Izin lokasi ditolak. Peta akan tetap menggunakan lokasi profil Anda.');
+        alert(t('location_denied'));
         return;
       }
 
@@ -68,16 +127,12 @@ export default function VenueMapScreen({ navigation, route }) {
         longitude: location.coords.longitude
       };
       
-      // Override homeLocation so future searches are bounded around their physical location
       setHomeLocation(liveLoc);
       
       const newRegion = { ...liveLoc, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-      setCurrentRegion(newRegion);
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(newRegion, 1000);
-      }
+      animateToRegion(newRegion);
     } catch (e) {
-      alert('Gagal mengambil lokasi GPS saat ini.');
+      alert(t('location_failed'));
     }
   };
 
@@ -107,7 +162,6 @@ export default function VenueMapScreen({ navigation, route }) {
       });
       if (result.length > 0) {
         const place = result[0];
-        // Combine street, name, or city
         const namePart = place.name || place.street || '';
         const cityPart = place.city || place.subregion || '';
         let address = namePart;
@@ -124,16 +178,32 @@ export default function VenueMapScreen({ navigation, route }) {
     setIsLoadingAddress(false);
   };
 
+  const handleWebViewMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'onRegionChange') {
+        onRegionChange();
+      } else if (data.type === 'onRegionChangeComplete') {
+        onRegionChangeComplete({
+          latitude: data.latitude,
+          longitude: data.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01
+        });
+      }
+    } catch (e) {
+      console.log('Error parsing webview message', e);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
-    // 1. Jika ada auto-complete suggestion yang tampil, langsung pilih yang pertama (paling relevan)
     if (suggestions.length > 0) {
       handleSelectSuggestion(suggestions[0]);
       return;
     }
 
-    // 2. Jika tidak ada suggestion, cari secara manual dengan Photon API (tetap dilimit sesuai lokasi sekitar user)
     try {
       const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=1`, {
         headers: { 'User-Agent': 'SparoApp/1.0' }
@@ -148,13 +218,9 @@ export default function VenueMapScreen({ navigation, route }) {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01
         };
-        setCurrentRegion(newRegion);
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
+        animateToRegion(newRegion);
         setIsFocused(false);
       } else {
-        // Fallback terakhir ke sistem Apple/Google Maps bawaan OS
         const result = await Location.geocodeAsync(searchQuery);
         if (result.length > 0) {
           const loc = result[0];
@@ -164,17 +230,14 @@ export default function VenueMapScreen({ navigation, route }) {
             latitudeDelta: 0.01,
             longitudeDelta: 0.01
           };
-          setCurrentRegion(newRegion);
-          if (mapRef.current) {
-            mapRef.current.animateToRegion(newRegion, 1000);
-          }
+          animateToRegion(newRegion);
           setIsFocused(false);
         } else {
-          alert('Lokasi tidak ditemukan di area sekitar.');
+          alert(t('location_not_found'));
         }
       }
     } catch (e) {
-      alert('Error mencari lokasi.');
+      alert(t('location_search_error'));
     }
   };
 
@@ -185,8 +248,6 @@ export default function VenueMapScreen({ navigation, route }) {
     if (text.trim().length > 2) {
       searchTimeout.current = setTimeout(async () => {
         try {
-          // Menggunakan Photon API tanpa bbox kaku agar hasil rekomendasi jauh lebih banyak
-          // namun tetap diprioritaskan (di-sorting) berdasarkan jarak terdekat (lat/lon)
           const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&lat=${currentRegion.latitude}&lon=${currentRegion.longitude}&limit=25`, {
             headers: { 'User-Agent': 'SparoApp/1.0' }
           });
@@ -213,7 +274,6 @@ export default function VenueMapScreen({ navigation, route }) {
               };
             });
             
-            // Hapus duplikat yang memiliki display_name sama persis
             const uniqueFormatted = formatted.filter((v,i,a)=>a.findIndex(t=>(t.display_name === v.display_name))===i);
             
             setSuggestions(uniqueFormatted);
@@ -241,22 +301,18 @@ export default function VenueMapScreen({ navigation, route }) {
       latitudeDelta: 0.01,
       longitudeDelta: 0.01
     };
-    setCurrentRegion(newRegion);
-    if (mapRef.current) {
-      mapRef.current.animateToRegion(newRegion, 1000);
-    }
+    animateToRegion(newRegion);
   };
 
   const confirmSelection = () => {
-    // Gunakan nama alamat asli dari reverse geocoding jika searchQuery kosong
-    const addressName = selectedAddress && selectedAddress !== 'Custom Location' ? selectedAddress.split(',')[0] : 'Titik Lokasi Pilihan';
+    const addressName = selectedAddress && selectedAddress !== 'Custom Location' ? selectedAddress.split(',')[0] : t('custom_location_point');
     const finalName = searchQuery.trim() !== '' ? searchQuery : addressName;
     
     const venue = {
       id: `custom_${Date.now()}`,
       name: finalName,
-      distance: selectedAddress && selectedAddress !== 'Custom Location' ? selectedAddress : 'Sesuai titik koordinat GPS',
-      type: 'Custom Pin',
+      distance: selectedAddress && selectedAddress !== 'Custom Location' ? selectedAddress : t('gps_coordinate'),
+      type: t('custom_pin'),
       status: 'AVAILABLE',
       latitude: currentRegion.latitude,
       longitude: currentRegion.longitude
@@ -277,15 +333,15 @@ export default function VenueMapScreen({ navigation, route }) {
       </View>
 
       <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
+        <WebView
+          ref={webViewRef}
+          source={{ html: leafletHTML }}
           style={styles.map}
-          initialRegion={currentRegion}
-          onRegionChange={onRegionChange}
-          onRegionChangeComplete={onRegionChangeComplete}
-          userInterfaceStyle="dark"
-          showsUserLocation={true}
-          showsMyLocationButton={false}
+          onMessage={handleWebViewMessage}
+          scrollEnabled={false}
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
         />
         
         {/* Fixed Center Pin */}
@@ -359,17 +415,17 @@ export default function VenueMapScreen({ navigation, route }) {
         <View style={styles.venueInfo}>
           {isDragging ? (
             <>
-              <Text style={styles.venueName}>Mencari lokasi...</Text>
-              <Text style={styles.venueDesc}>Geser peta untuk menentukan titik</Text>
+              <Text style={styles.venueName}>{t('searching_location')}</Text>
+              <Text style={styles.venueDesc}>{t('drag_map')}</Text>
             </>
           ) : isLoadingAddress ? (
             <>
-              <Text style={styles.venueName}>Memuat alamat...</Text>
-              <Text style={styles.venueDesc}>Mohon tunggu sebentar</Text>
+              <Text style={styles.venueName}>{t('loading_address')}</Text>
+              <Text style={styles.venueDesc}>{t('please_wait')}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.venueName} numberOfLines={1}>{searchQuery || 'Titik Lokasi Pilihan'}</Text>
+              <Text style={styles.venueName} numberOfLines={1}>{searchQuery || t('custom_location_point')}</Text>
               <Text style={styles.venueDesc} numberOfLines={2}>{selectedAddress}</Text>
             </>
           )}
@@ -379,7 +435,7 @@ export default function VenueMapScreen({ navigation, route }) {
           onPress={confirmSelection}
           disabled={isDragging || isLoadingAddress}
         >
-          <Text style={[styles.confirmBtnText, (isDragging || isLoadingAddress) && { color: '#8A95A5' }]}>PILIH LOKASI</Text>
+          <Text style={[styles.confirmBtnText, (isDragging || isLoadingAddress) && { color: '#8A95A5' }]}>{t('pick_location_btn')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -400,8 +456,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 5 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
-  mapContainer: { flex: 1 },
-  map: { width: '100%', height: '100%' },
+  mapContainer: { flex: 1, backgroundColor: '#0F1522' },
+  map: { width: '100%', height: '100%', backgroundColor: '#0F1522' },
   searchWrapper: {
     position: 'absolute',
     top: 20,
@@ -464,8 +520,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -24, // half of icon size (48/2)
-    marginTop: -48, // offset icon size so the point is at the center
+    marginLeft: -24,
+    marginTop: -48,
     alignItems: 'center',
   },
   pinIcon: {

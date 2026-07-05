@@ -392,7 +392,7 @@ export default function CreateChallengeScreen({ navigation, route }) {
           <Animated.View style={[styles.errorToast, { opacity: toastOpacity }]}>
             <Feather name="alert-circle" size={18} color="#0F1522" style={{ marginRight: 8 }} />
             <Text style={styles.errorToastText}>
-              {language === 'Bahasa Indonesia' ? 'Silakan pilih lokasi (Venue) terlebih dahulu!' : 'Please pick a location (Venue) first!'}
+              {t('pick_location_toast')}
             </Text>
           </Animated.View>
         )}
