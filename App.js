@@ -1,17 +1,21 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import React, { useEffect, useRef } from 'react';
-import { AppState, LogBox, Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, LogBox, Platform, View, Image, ActivityIndicator } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import * as SplashScreen from 'expo-splash-screen';
 
-// Sembunyikan semua pesan kuning (WARN) di layar HP agar presentasi mulus
-LogBox.ignoreAllLogs();
+// Tahan splash screen bawaan OS (Logo Sparo) agar tidak hilang otomatis
+SplashScreen.preventAutoHideAsync().catch(() => {});
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import OfflineIndicator from './src/components/OfflineIndicator';
 import useAppStore from './src/store/useAppStore';
+
+// Sembunyikan semua pesan kuning (WARN) di layar HP agar presentasi mulus
+LogBox.ignoreAllLogs();
 
 // Configure notification handler for foreground notifications
 Notifications.setNotificationHandler({
@@ -70,6 +74,16 @@ const SparoTheme = {
 export default function App() {
   const profile = useAppStore(state => state.profile);
   const responseListener = useRef();
+
+  // Memaksa Splash Screen Bawaan (Native) tampil minimal 5 detik
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        await SplashScreen.hideAsync();
+      } catch (e) {}
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (profile?.id) {
