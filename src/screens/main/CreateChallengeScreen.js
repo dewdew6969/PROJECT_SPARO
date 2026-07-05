@@ -8,6 +8,17 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../../store/useAppStore';
 import { Image } from 'expo-image';
 
+const getSportIcon = (sportName) => {
+  if (!sportName) return 'badminton';
+  const s = String(sportName).toLowerCase();
+  if (s.includes('basket')) return 'basketball';
+  if (s.includes('futsal') || s.includes('soccer') || s.includes('football') || s.includes('bola')) return 'soccer';
+  if (s.includes('tennis') || s.includes('tenis')) return 'tennis';
+  if (s.includes('ping') || s.includes('table')) return 'table-tennis';
+  if (s.includes('voli') || s.includes('volley')) return 'volleyball';
+  return 'badminton';
+};
+
 const getAvatarUrl = (str) => {
   if (!str || str === "null") return 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
   
@@ -36,7 +47,44 @@ export default function CreateChallengeScreen({ navigation, route }) {
     isPro: true
   };
 
-  const [activeSport, setActiveSport] = useState(profile?.primarySport || 'Badminton');
+  const [opponentData, setOpponentData] = useState(opponent);
+
+  React.useEffect(() => {
+    let intervalId;
+    const fetchOpponentData = async () => {
+      if (!opponentData.id || opponentData.id === '0') return;
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+        const response = await fetch(`${apiUrl}/users/${opponentData.id}?t=${Date.now()}`);
+        if (response.ok) {
+          const data = await response.json();
+          setOpponentData(prev => ({
+            ...prev,
+            ...data,
+            name: data.full_name || data.username || prev.name,
+            level: data.primary_level || prev.level,
+            sports: [data.primary_sport, data.secondary_sport].filter(Boolean)
+          }));
+        }
+      } catch (err) {}
+    };
+    fetchOpponentData();
+    intervalId = setInterval(fetchOpponentData, 2000);
+    return () => clearInterval(intervalId);
+  }, [opponentData.id]);
+
+  const availableSports = [
+    opponentData.primarySport || opponentData.primary_sport || (opponentData.sports && opponentData.sports[0]),
+    opponentData.secondarySport || opponentData.secondary_sport || (opponentData.sports && opponentData.sports[1])
+  ].filter(Boolean);
+  
+  const [activeSport, setActiveSport] = useState(availableSports[0] || 'Badminton');
+
+  React.useEffect(() => {
+    if (availableSports.length > 0 && !availableSports.includes(activeSport)) {
+      setActiveSport(availableSports[0]);
+    }
+  }, [availableSports.join(',')]);
   
   // Date & Time Picker State
   const [matchDate, setMatchDate] = useState(new Date());
@@ -179,12 +227,18 @@ export default function CreateChallengeScreen({ navigation, route }) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('sports_category').toUpperCase()}</Text>
             <View style={styles.sportRow}>
-              {[profile?.primarySport, profile?.secondarySport].filter(Boolean).map((sport) => (
+              {(availableSports.length > 0 ? availableSports : ['Badminton']).map((sport) => (
                 <TouchableOpacity 
                   key={sport} 
-                  style={[styles.sportBtn, activeSport === sport && styles.sportBtnActive]}
+                  style={[styles.sportBtn, activeSport === sport && styles.sportBtnActive, { flexDirection: 'row' }]}
                   onPress={() => setActiveSport(sport)}
                 >
+                  <MaterialCommunityIcons 
+                    name={getSportIcon(sport)} 
+                    size={16} 
+                    color={activeSport === sport ? '#0F1522' : '#8A95A5'} 
+                    style={{ marginRight: 8 }}
+                  />
                   <Text style={[styles.sportText, activeSport === sport && styles.sportTextActive]}>{sport.toUpperCase()}</Text>
                 </TouchableOpacity>
               ))}
@@ -342,9 +396,9 @@ const styles = StyleSheet.create({
   
   // Sport Selection
   sportRow: { flexDirection: 'row', gap: 10 },
-  sportBtn: { flex: 1, backgroundColor: '#1C2433', paddingVertical: 12, borderRadius: 25, alignItems: 'center', borderWidth: 1, borderColor: '#2D3748' },
+  sportBtn: { flex: 1, backgroundColor: '#1C2433', paddingVertical: 12, borderRadius: 25, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#2D3748' },
   sportBtnActive: { backgroundColor: '#D4FF00', borderColor: '#D4FF00' },
-  sportText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+  sportText: { color: '#FFF', fontWeight: 'bold', fontSize: 14, includeFontPadding: false, textAlignVertical: 'center' },
   sportTextActive: { color: '#0F1522' },
 
   // Date & Time Picker
