@@ -539,9 +539,13 @@ const useAppStore = create((set, get) => ({
 
   t: (key) => {
     const lang = get().language;
+    
+    // Combine local translations and extraTranslations
+    const allTranslations = { ...translations, ...extraTranslations };
+
     // Fallback to English if the translation doesn't exist for the current language
-    return (translations[lang] && translations[lang][key]) 
-      || (translations['English (US)'] && translations['English (US)'][key]) 
+    return (allTranslations[lang] && allTranslations[lang][key]) 
+      || (allTranslations['English (US)'] && allTranslations['English (US)'][key]) 
       || key;
   },
 
