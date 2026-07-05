@@ -96,6 +96,8 @@ export default function CreateChallengeScreen({ navigation, route }) {
   const [activeVenue, setActiveVenue] = useState(null);
   const [isCompetitive, setIsCompetitive] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isSent, setIsSent] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -135,19 +137,23 @@ export default function CreateChallengeScreen({ navigation, route }) {
       });
 
       if (response.ok) {
-        if (Platform.OS === 'android') {
-          import('react-native').then(({ ToastAndroid }) => ToastAndroid.show(t('challenge_sent') || 'Challenge Sent!', ToastAndroid.SHORT));
-        }
         useAppStore.getState().setHasNewMatches(true);
-        navigation.navigate('Main', { screen: 'Home' });
+        setIsSent(true);
+        setShowSuccessModal(true);
+        // Do not set isSending to false here so the button doesn't flicker back
       } else {
         console.error('Failed to send challenge');
+        setIsSending(false);
       }
     } catch (err) {
       console.error(err);
-    } finally {
       setIsSending(false);
     }
+  };
+
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false);
+    navigation.navigate('Main', { screen: 'Home' });
   };
 
   const onChangeDateTime = (event, selectedDate) => {
@@ -359,10 +365,35 @@ export default function CreateChallengeScreen({ navigation, route }) {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendChallenge} disabled={isSending}>
-            <Text style={styles.sendBtnText}>{isSending ? 'SENDING...' : t('send_challenge').toUpperCase()}</Text>
+          <TouchableOpacity 
+            style={[styles.sendBtn, isSent && { backgroundColor: '#1C2433', borderColor: '#D4FF00', borderWidth: 1 }]} 
+            onPress={handleSendChallenge} 
+            disabled={isSending || isSent}
+          >
+            <Text style={[styles.sendBtnText, isSent && { color: '#D4FF00' }]}>
+              {isSent ? (language === 'Bahasa Indonesia' ? 'TERKIRIM!' : 'SENT!') : (isSending ? 'SENDING...' : t('send_challenge').toUpperCase())}
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Success Modal */}
+        <Modal visible={showSuccessModal} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalIconBox}>
+                <Feather name="check-circle" size={50} color="#D4FF00" />
+              </View>
+              <Text style={styles.modalTitle}>{language === 'Bahasa Indonesia' ? 'Tantangan Terkirim!' : 'Challenge Sent!'}</Text>
+              <Text style={styles.modalDesc}>
+                {language === 'Bahasa Indonesia' ? 'Tantangan Anda telah berhasil dikirim ke ' : 'Your challenge has been successfully sent to '}
+                <Text style={{ color: '#D4FF00', fontWeight: 'bold' }}>{opponent.name}</Text>.
+              </Text>
+              <TouchableOpacity style={styles.modalBtn} onPress={handleCloseSuccessModal}>
+                <Text style={styles.modalBtnText}>{language === 'Bahasa Indonesia' ? 'MANTAP!' : 'AWESOME!'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
       </LinearGradient>
     </SafeAreaView>
@@ -452,5 +483,14 @@ const styles = StyleSheet.create({
   iosPickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   iosPickerContainer: { backgroundColor: '#1C2433', paddingBottom: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   iosPickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', padding: 15, borderBottomWidth: 1, borderBottomColor: '#2D3748' },
-  iosPickerDone: { color: '#D4FF00', fontSize: 16, fontWeight: 'bold' }
+  iosPickerDone: { color: '#D4FF00', fontSize: 16, fontWeight: 'bold' },
+
+  // Success Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#161C26', borderRadius: 24, padding: 30, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: '#2D3748' },
+  modalIconBox: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(212, 255, 0, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(212, 255, 0, 0.3)' },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: '#FFF', marginBottom: 10, letterSpacing: 1 },
+  modalDesc: { fontSize: 14, color: '#8A95A5', textAlign: 'center', lineHeight: 22, marginBottom: 30 },
+  modalBtn: { backgroundColor: '#D4FF00', width: '100%', paddingVertical: 15, borderRadius: 12, alignItems: 'center' },
+  modalBtnText: { color: '#0F1522', fontSize: 16, fontWeight: '900', letterSpacing: 1 }
 });
