@@ -11,8 +11,13 @@
     "ios": {
       "icon": "./assets/expo.icon"
     },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#CCFF00"
+    },
     "android": {
       "package": "com.dewapermana.sparo",
+      "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDummyKeyHereToPreventStartupCrash"
