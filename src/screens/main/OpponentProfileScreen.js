@@ -294,7 +294,7 @@ export default function OpponentProfileScreen({ navigation, route }) {
                 <View style={{ flex: 1 }}>
                   <View style={styles.repTitleRow}>
                     <Text style={styles.repTitle}>{t('sportsmanship')}</Text>
-                    <Text style={[styles.repValue, { color: '#A0BEFF' }]}>{opponent.score} / 5.0</Text>
+                    <Text style={[styles.repValue, { color: '#A0BEFF' }]}>{Number(opponent.score).toFixed(1)} / 5.0</Text>
                   </View>
                   <Text style={styles.repDesc}>{t('sportsmanship_desc')}</Text>
                 </View>
