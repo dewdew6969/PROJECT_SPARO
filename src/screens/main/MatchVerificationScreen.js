@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import useAppStore from '../../store/useAppStore';
+import CustomAlert from '../../components/CustomAlert';
 
 export default function MatchVerificationScreen({ route, navigation }) {
     const { t, language } = useAppStore();
     const { challenge, userId } = route?.params || {};
+    const insets = useSafeAreaInsets();
 
     const [location, setLocation] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -20,13 +22,25 @@ export default function MatchVerificationScreen({ route, navigation }) {
     const [opponentScore, setOpponentScore] = useState('');
     const [isConflict, setIsConflict] = useState(false);
     const [proofImage, setProofImage] = useState(null);
+    const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', onCloseAction: null });
+
+    const showAlert = (title, message, onCloseAction = null) => {
+        setAlertConfig({ visible: true, title, message, onCloseAction });
+    };
+
+    const handleCloseAlert = () => {
+        const action = alertConfig.onCloseAction;
+        setAlertConfig({ ...alertConfig, visible: false, onCloseAction: null });
+        if (action) action();
+    };
 
     const handleCheckIn = async () => {
         setLoading(true);
         try {
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert("Akses Ditolak", "Izin akses lokasi dibutuhkan untuk fitur check-in.");
+                showAlert("Akses Ditolak", "Izin akses lokasi dibutuhkan untuk fitur check-in.");
                 setLoading(false);
                 return;
             }
@@ -45,9 +59,9 @@ export default function MatchVerificationScreen({ route, navigation }) {
             }
             
             setCheckedIn(true);
-            Alert.alert("Check-in Berhasil!", "Sistem memvalidasi bahwa Anda berada di venue pertandingan.");
+            showAlert("Check-in Berhasil!", "Sistem memvalidasi bahwa Anda berada di venue pertandingan.");
         } catch (error) {
-            Alert.alert("Error", error.message);
+            showAlert("Error", error.message);
         } finally {
             setLoading(false);
         }
@@ -55,7 +69,7 @@ export default function MatchVerificationScreen({ route, navigation }) {
 
     const handleSubmitScore = async () => {
         if (!myScore || !opponentScore) {
-            Alert.alert("Perhatian", "Mohon masukkan skor pertandingan.");
+            showAlert("Perhatian", "Mohon masukkan skor pertandingan.");
             return;
         }
         try {
@@ -68,9 +82,9 @@ export default function MatchVerificationScreen({ route, navigation }) {
                 const errData = await response.json();
                 throw new Error(errData.detail || "Gagal mengirim skor");
             }
-            Alert.alert("Sukses", "Skor berhasil dikirim. Menunggu konfirmasi dari lawan...");
+            showAlert("Sukses", "Skor berhasil dikirim. Menunggu konfirmasi dari lawan...");
         } catch (error) {
-            Alert.alert("Error", error.message);
+            showAlert("Error", error.message);
         }
     };
 
@@ -87,8 +101,7 @@ export default function MatchVerificationScreen({ route, navigation }) {
             }
 
             if (agreed) {
-                Alert.alert("Match Selesai", "Pertandingan telah terverifikasi. ELO Rating Anda akan diperbarui oleh sistem.");
-                navigation.goBack();
+                showAlert("Match Selesai", "Pertandingan telah terverifikasi. ELO Rating Anda akan diperbarui oleh sistem.", () => navigation.goBack());
             } else {
                 setIsConflict(true);
             }
@@ -97,18 +110,51 @@ export default function MatchVerificationScreen({ route, navigation }) {
         }
     };
 
-    const handlePickImage = async () => {
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 1,
-        });
+    const handlePickImage = () => {
+        setImagePickerModalVisible(true);
+    };
 
-        if (!result.canceled) {
-            setProofImage(result.assets[0].uri);
-            // Simulasi POST /challenges/{id}/upload-proof (Mocking OCR di Backend)
-            Alert.alert("Proses OCR AI", "Foto papan skor sedang diproses oleh AI (Tesseract OCR) untuk membaca skor secara otomatis...");
+    const uploadImageToBackend = async (uri) => {
+        try {
+            setLoading(true);
+            showAlert("Proses OCR AI", "Mengunggah foto dan memproses AI OCR di server...");
+            
+            const formData = new FormData();
+            const filename = uri.split('/').pop();
+            const match = /\.(\w+)$/.exec(filename);
+            const type = match ? `image/${match[1]}` : `image`;
+            formData.append('file', { uri, name: filename, type });
+            
+            const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/upload-proof`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Gagal mengunggah bukti skor");
+            }
+            
+            setProofImage(uri);
+            
+            // Format respons dari server untuk ditampilkan ke user
+            let resultMsg = "Foto bukti berhasil diunggah dan diproses oleh server.";
+            if (data.ocr_result || data.extracted_score) {
+                resultMsg += `\n\nHasil Deteksi AI:\n${JSON.stringify(data.ocr_result || data.extracted_score, null, 2)}`;
+            } else if (data.message) {
+                resultMsg += `\n\nPesan Server: ${data.message}`;
+            } else if (Object.keys(data).length > 0) {
+                resultMsg += `\n\nData Mentah Server:\n${JSON.stringify(data, null, 2)}`;
+            }
+
+            showAlert("Sukses", resultMsg);
+        } catch (error) {
+            showAlert("Error", error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -182,6 +228,58 @@ export default function MatchVerificationScreen({ route, navigation }) {
                     </View>
                 )}
             </View>
+
+            {/* Custom Image Picker Modal */}
+            <Modal visible={imagePickerModalVisible} transparent={true} animationType="fade" onRequestClose={() => setImagePickerModalVisible(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setImagePickerModalVisible(false)}>
+                    <View style={[styles.actionSheet, { paddingBottom: Math.max(insets.bottom + 20, 30) }]}>
+                        <View style={styles.actionSheetHeader}>
+                            <Text style={styles.actionSheetTitle}>Unggah Foto Bukti Skor</Text>
+                        </View>
+                        <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
+                            setImagePickerModalVisible(false);
+                            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                            if (status !== 'granted') {
+                                showAlert('Izin Ditolak', 'Izin kamera dibutuhkan untuk mengambil foto skor.');
+                                return;
+                            }
+                            let result = await ImagePicker.launchCameraAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                allowsEditing: true,
+                                quality: 0.8,
+                            });
+                            if (!result.canceled) {
+                                uploadImageToBackend(result.assets[0].uri);
+                            }
+                        }}>
+                            <MaterialCommunityIcons name="camera" size={24} color="#FFF" style={{ marginRight: 15 }} />
+                            <Text style={styles.actionSheetText}>Kamera</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
+                            setImagePickerModalVisible(false);
+                            let result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                allowsEditing: true,
+                                quality: 0.8,
+                            });
+                            if (!result.canceled) {
+                                uploadImageToBackend(result.assets[0].uri);
+                            }
+                        }}>
+                            <MaterialCommunityIcons name="image" size={24} color="#FFF" style={{ marginRight: 15 }} />
+                            <Text style={styles.actionSheetText}>Galeri</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            <CustomAlert 
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                onClose={handleCloseAlert}
+            />
         </SafeAreaView>
     );
 }
@@ -211,5 +309,13 @@ const styles = StyleSheet.create({
     disagreeBtn: { backgroundColor: '#dc3545' },
     actionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
     proofImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 20 },
-    infoText: { color: '#666', fontSize: 12, textAlign: 'center', marginTop: 16 }
+    infoText: { color: '#666', fontSize: 12, textAlign: 'center', marginTop: 16 },
+    
+    // Action Sheet for Image Picker
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(10,15,24,0.7)', justifyContent: 'flex-end' },
+    actionSheet: { backgroundColor: '#1C2433', width: '100%', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+    actionSheetHeader: { marginBottom: 20, alignItems: 'center' },
+    actionSheetTitle: { fontSize: 16, fontWeight: 'bold', color: '#8A95A5' },
+    actionSheetItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#2D3748' },
+    actionSheetText: { fontSize: 16, color: '#FFF' }
 });

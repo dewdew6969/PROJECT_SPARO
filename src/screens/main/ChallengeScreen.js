@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import useAppStore from '../../store/useAppStore';
 
-export default function ChallengeScreen() {
+export default function ChallengeScreen({ navigation }) {
   const { t, profile, setPendingMatchesCount } = useAppStore();
 
   
@@ -128,14 +128,7 @@ export default function ChallengeScreen() {
     }, [profile?.id])
   );
 
-  const [scoreModalVisible, setScoreModalVisible] = useState(false);
-  const [selectedMatchId, setSelectedMatchId] = useState(null);
-  const [myScore, setMyScore] = useState('');
-  const [opponentScore, setOpponentScore] = useState('');
-  const [proofImage, setProofImage] = useState(null);
-  const [isCompetitiveMatch, setIsCompetitiveMatch] = useState(false);
-  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
-
+  // Modal state moved to MatchVerificationScreen
   const updateStatus = async (id, status) => {
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
@@ -159,60 +152,8 @@ export default function ChallengeScreen() {
     updateStatus(id, 'rejected');
   };
 
-  const openScoreModal = (match) => {
-    setSelectedMatchId(match.id);
-    setIsCompetitiveMatch(match.sport.toLowerCase().includes('competitive'));
-    setMyScore('');
-    setOpponentScore('');
-    setProofImage(null);
-    setScoreModalVisible(true);
-  };
-
-  const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
-
-  const pickImage = () => {
-    setImagePickerModalVisible(true);
-  };
-
-  const handleSubmitScore = async () => {
-    if (isCompetitiveMatch && !proofImage) {
-      if (Platform.OS === 'android') ToastAndroid.show('Mohon unggah foto bukti skor untuk validasi kemenangan!', ToastAndroid.LONG);
-      return;
-    }
-    
-    setIsSubmittingScore(true);
-    try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      
-      if (proofImage) {
-        const formData = new FormData();
-        const filename = proofImage.split('/').pop();
-        const match = /\\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
-        formData.append('file', { uri: proofImage, name: filename, type });
-        
-        await fetch(`${API_URL}/challenges/${selectedMatchId}/upload-proof`, {
-          method: 'POST',
-          body: formData,
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-      }
-      
-      const response = await fetch(`${API_URL}/challenges/${selectedMatchId}/submit-score?user_id=${profile?.id}&my_score=${myScore}&opponent_score=${opponentScore}`, {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        setScoreModalVisible(false);
-        fetchChallenges();
-        if (Platform.OS === 'android') ToastAndroid.show(t('score_submitted_success'), ToastAndroid.LONG);
-      }
-    } catch (err) {
-      console.error(err);
-      if (Platform.OS === 'android') ToastAndroid.show('Gagal mengirim skor', ToastAndroid.SHORT);
-    } finally {
-      setIsSubmittingScore(false);
-    }
+  const navigateToVerification = (match) => {
+    navigation.navigate('MatchVerification', { challenge: match, userId: profile?.id });
   };
 
   if (!profile) return null; // Cegah crash saat profile direset menjadi null ketika proses logout
@@ -321,7 +262,7 @@ export default function ChallengeScreen() {
                 <Text style={styles.detail}>{match.venue}</Text>
               </View>
               <View style={[styles.actions, { marginTop: 15 }]}>
-                <TouchableOpacity style={styles.btnPrimary} onPress={() => openScoreModal(match)}>
+                <TouchableOpacity style={styles.btnPrimary} onPress={() => navigateToVerification(match)}>
                   <Text style={styles.btnTextPrimary}>{t('input_score')}</Text>
                 </TouchableOpacity>
               </View>
@@ -340,7 +281,7 @@ export default function ChallengeScreen() {
               <Text style={styles.challengeTitle}>Vs {match.name}</Text>
               <Text style={[styles.detail, { marginBottom: 15 }]}>{match.sport}</Text>
               {match.status === 'awaiting_verification' && (
-                <TouchableOpacity style={styles.btnPrimary} onPress={() => openScoreModal(match.id)}>
+                <TouchableOpacity style={styles.btnPrimary} onPress={() => navigateToVerification(match)}>
                   <Text style={styles.btnTextPrimary}>{t('input_score')}</Text>
                 </TouchableOpacity>
               )}
@@ -350,116 +291,7 @@ export default function ChallengeScreen() {
         </ScrollView>
       </LinearGradient>
 
-      {/* Score Modal */}
-      <Modal visible={scoreModalVisible} transparent={true} animationType="slide" onRequestClose={() => setScoreModalVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setScoreModalVisible(false)}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('input_score')}</Text>
-              <TouchableOpacity onPress={() => setScoreModalVisible(false)}>
-                <Feather name="x" size={20} color="#8A95A5" />
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.scoreInputRow}>
-              <View style={styles.scoreBox}>
-                <Text style={styles.scoreLabel}>{t('my_score')}</Text>
-                <TextInput 
-                  style={styles.scoreInput}
-                  keyboardType="numeric"
-                  value={myScore}
-                  onChangeText={setMyScore}
-                  placeholder="0"
-                  placeholderTextColor="#2D3748"
-                  maxLength={3}
-                />
-              </View>
-              <Text style={styles.vsText}>VS</Text>
-              <View style={styles.scoreBox}>
-                <Text style={styles.scoreLabel}>{t('opponent_score')}</Text>
-                <TextInput 
-                  style={styles.scoreInput}
-                  keyboardType="numeric"
-                  value={opponentScore}
-                  onChangeText={setOpponentScore}
-                  placeholder="0"
-                  placeholderTextColor="#2D3748"
-                  maxLength={3}
-                />
-              </View>
-            </View>
-
-            {isCompetitiveMatch && (
-              <View style={styles.proofSection}>
-                <Text style={styles.proofLabel}>Wajib Unggah Foto Papan Skor (Validasi) <Text style={{ color: '#FF4D4D' }}>*</Text></Text>
-                <TouchableOpacity style={styles.proofBtn} onPress={pickImage}>
-                  {proofImage ? (
-                    <Image source={{ uri: proofImage }} style={styles.proofImagePreview} />
-                  ) : (
-                    <View style={styles.proofPlaceholder}>
-                      <Feather name="camera" size={32} color="#8A95A5" />
-                      <Text style={styles.proofPlaceholderText}>Ambil Foto Skor</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity 
-              style={[styles.btnSubmitScore, (!myScore || !opponentScore || (isCompetitiveMatch && !proofImage) || isSubmittingScore) && { opacity: 0.5 }]} 
-              disabled={!myScore || !opponentScore || (isCompetitiveMatch && !proofImage) || isSubmittingScore}
-              onPress={handleSubmitScore}
-            >
-              <Text style={styles.btnTextSubmitScore}>{isSubmittingScore ? 'MENGIRIM...' : t('submit_score')}</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Custom Image Picker Modal */}
-      <Modal visible={imagePickerModalVisible} transparent={true} animationType="fade" onRequestClose={() => setImagePickerModalVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setImagePickerModalVisible(false)}>
-          <View style={styles.actionSheet}>
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>Unggah Foto Skor</Text>
-            </View>
-            <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
-              setImagePickerModalVisible(false);
-              const { status } = await ImagePicker.requestCameraPermissionsAsync();
-              if (status !== 'granted') {
-                if (Platform.OS === 'android') ToastAndroid.show('Izin kamera ditolak', ToastAndroid.SHORT);
-                return;
-              }
-              let result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                quality: 0.8,
-              });
-              if (!result.canceled) {
-                setProofImage(result.assets[0].uri);
-              }
-            }}>
-              <Feather name="camera" size={20} color="#FFF" style={{ marginRight: 15 }} />
-              <Text style={styles.actionSheetText}>Kamera</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
-              setImagePickerModalVisible(false);
-              let result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                quality: 0.8,
-              });
-              if (!result.canceled) {
-                setProofImage(result.assets[0].uri);
-              }
-            }}>
-              <Feather name="image" size={20} color="#FFF" style={{ marginRight: 15 }} />
-              <Text style={styles.actionSheetText}>Galeri</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
     </SafeAreaView>
   );
@@ -495,29 +327,5 @@ const styles = StyleSheet.create({
   btnTextPrimary: { color: '#0F1522', fontWeight: 'bold' },
   emptyText: { color: '#8A95A5', textAlign: 'center', marginTop: 50, fontSize: 16 },
 
-  // Score Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(10,15,24,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#161C26', width: '100%', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#2D3748' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
-  scoreInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 },
-  scoreBox: { flex: 1, alignItems: 'center' },
-  scoreLabel: { fontSize: 12, color: '#8A95A5', marginBottom: 10, fontWeight: 'bold' },
-  scoreInput: { backgroundColor: '#0F1522', color: '#FFF', fontSize: 32, fontWeight: 'bold', width: 80, height: 80, textAlign: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#233045' },
-  vsText: { color: '#D4FF00', fontWeight: 'bold', fontSize: 16, marginHorizontal: 15, marginTop: 25 },
-  proofSection: { marginBottom: 25 },
-  proofLabel: { fontSize: 12, color: '#8A95A5', marginBottom: 10, fontWeight: 'bold' },
-  proofBtn: { backgroundColor: '#0F1522', height: 120, borderRadius: 12, borderWidth: 1, borderColor: '#233045', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  proofPlaceholder: { alignItems: 'center' },
-  proofPlaceholderText: { color: '#8A95A5', marginTop: 8, fontSize: 12 },
-  proofImagePreview: { width: '100%', height: '100%', resizeMode: 'cover' },
-  btnSubmitScore: { backgroundColor: '#D4FF00', paddingVertical: 15, borderRadius: 12, alignItems: 'center' },
-  btnTextSubmitScore: { color: '#0F1522', fontWeight: 'bold', fontSize: 16 },
 
-  // Action Sheet for Image Picker
-  actionSheet: { backgroundColor: '#1C2433', width: '100%', position: 'absolute', bottom: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20 },
-  actionSheetHeader: { marginBottom: 20, alignItems: 'center' },
-  actionSheetTitle: { fontSize: 16, fontWeight: 'bold', color: '#8A95A5' },
-  actionSheetItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#2D3748' },
-  actionSheetText: { fontSize: 16, color: '#FFF' }
 });
