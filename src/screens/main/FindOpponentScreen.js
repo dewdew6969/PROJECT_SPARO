@@ -159,12 +159,12 @@ export default function FindOpponentScreen({ navigation }) {
               elo: u.elo || 1500,
               level: u.primary_level || 'BEGINNER',
               distance: u.distance !== null ? `${u.distance} km` : '0 km',
-              matches: 0,
-              wins: 0,
+              matches: u.matches || 0,
+              wins: u.wins || 0,
               isPro: u.elo > 1600,
               avatar: finalAvatar,
               sports: [u.primary_sport, u.secondary_sport].filter(Boolean),
-              winRate: 0
+              winRate: u.matches > 0 ? Math.round((u.wins / u.matches) * 100) : 0
             };
           });
           

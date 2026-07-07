@@ -10,6 +10,17 @@ import useAppStore from '../../store/useAppStore';
 import CustomAlert from '../../components/CustomAlert';
 import { Image } from 'expo-image';
 
+const getSportIcon = (sportName) => {
+  if (!sportName) return 'badminton';
+  const s = String(sportName).toLowerCase();
+  if (s.includes('basket')) return 'basketball';
+  if (s.includes('futsal') || s.includes('soccer') || s.includes('football') || s.includes('bola')) return 'soccer';
+  if (s.includes('tennis') || s.includes('tenis')) return 'tennis';
+  if (s.includes('ping') || s.includes('table')) return 'table-tennis';
+  if (s.includes('voli') || s.includes('volley')) return 'volleyball';
+  return 'badminton';
+};
+
 const getAvatarUrl = (str, cacheBuster = null) => {
   if (!str || str === "null") return 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
   
@@ -215,7 +226,7 @@ export default function OpponentProfileScreen({ navigation, route }) {
               <View style={styles.sportRowDetail}>
                 <View style={styles.sportIconCircle}>
                   <MaterialCommunityIcons 
-                    name={primarySport.toLowerCase() === 'basket' ? 'basketball' : primarySport.toLowerCase() === 'futsal' ? 'soccer' : 'badminton'} 
+                    name={getSportIcon(primarySport)} 
                     size={20} 
                     color="#D4FF00" 
                   />
@@ -232,7 +243,7 @@ export default function OpponentProfileScreen({ navigation, route }) {
                   <View style={styles.sportRowDetail}>
                     <View style={styles.sportIconCircle}>
                       <MaterialCommunityIcons 
-                        name={secondarySport.toLowerCase() === 'basket' ? 'basketball' : secondarySport.toLowerCase() === 'futsal' ? 'soccer' : 'badminton'} 
+                        name={getSportIcon(secondarySport)} 
                         size={20} 
                         color="#8A95A5" 
                       />

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Image, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ExpoSplashScreen from 'expo-splash-screen';
 import useAppStore from '../../store/useAppStore';
 
 export default function SplashScreen({ navigation }) {
@@ -9,6 +10,8 @@ export default function SplashScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Sembunyikan native splash screen secepatnya agar JS splash screen bisa berjalan
+    ExpoSplashScreen.hideAsync().catch(() => {});
     // Jalankan animasi fade-in pada logo
     Animated.timing(fadeAnim, {
       toValue: 1,

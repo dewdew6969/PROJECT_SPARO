@@ -5,6 +5,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platfo
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import useAppStore from '../../store/useAppStore';
 
 export default function CreateTournamentScreen({ navigation, route }) {
@@ -16,7 +18,22 @@ export default function CreateTournamentScreen({ navigation, route }) {
   
   const [activeVenue, setActiveVenue] = useState(null);
   
+  
   const [maxParticipants, setMaxParticipants] = useState('16');
+  const [prize, setPrize] = useState('');
+  const [poster, setPoster] = useState(null);
+
+  const pickPoster = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setPoster(result.assets[0].uri);
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -55,11 +72,35 @@ export default function CreateTournamentScreen({ navigation, route }) {
           sport: sport,
           date: date.toISOString(),
           location: activeVenue.name,
-          max_participants: parseInt(maxParticipants, 10) || 0
+          max_participants: parseInt(maxParticipants, 10) || 0,
+          prize: prize || 'Trophy & Cash'
         })
       });
 
       if (response.ok) {
+        const result = await response.json();
+        
+        // Upload poster if exists
+        if (poster) {
+          try {
+            let formData = new FormData();
+            formData.append('file', {
+              uri: poster,
+              name: 'poster.jpg',
+              type: 'image/jpeg',
+            });
+            await fetch(`${API_URL}/tournaments/${result.id}/upload-poster`, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            });
+          } catch (uploadError) {
+            console.error('Failed to upload poster:', uploadError);
+          }
+        }
+
         if (Platform.OS === 'android') {
           import('react-native').then(({ ToastAndroid }) => ToastAndroid.show('Tournament Created!', ToastAndroid.SHORT));
         }
@@ -239,6 +280,36 @@ export default function CreateTournamentScreen({ navigation, route }) {
             </View>
           </View>
 
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>POSTER IMAGE (OPTIONAL)</Text>
+            <TouchableOpacity style={styles.posterUpload} onPress={pickPoster}>
+              {poster ? (
+                <Image source={{ uri: poster }} style={styles.posterImage} contentFit="cover" />
+              ) : (
+                <>
+                  <Feather name="image" size={24} color="#8A95A5" />
+                  <Text style={styles.posterText}>Tap to upload poster</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{(t('prize_label') || 'PRIZE (OPTIONAL)').toUpperCase()}</Text>
+            <View style={styles.inputBox}>
+              <Feather name="gift" size={20} color="#8A95A5" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder={t('prize_placeholder') || "e.g. Gold Medal"}
+                placeholderTextColor="#8A95A5"
+                value={prize}
+                onChangeText={setPrize}
+              />
+            </View>
+          </View>
+
+
           <View style={{ height: 100 }} />
         </ScrollView>
 
@@ -260,6 +331,9 @@ const styles = StyleSheet.create({
   backBtn: { padding: 5 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFF' },
   scrollContent: { padding: 20 },
+  posterUpload: { height: 150, backgroundColor: '#1C2433', borderRadius: 12, borderWidth: 1, borderColor: '#2D3748', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
+  posterImage: { width: '100%', height: '100%', borderRadius: 12 },
+  posterText: { color: '#8A95A5', marginTop: 10, fontSize: 12 },
   
   section: { marginBottom: 25 },
   sectionTitle: { fontSize: 12, fontWeight: 'bold', color: '#8A95A5', letterSpacing: 1.5, marginBottom: 15 },

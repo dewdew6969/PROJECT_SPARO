@@ -45,8 +45,10 @@ export default function ChallengeScreen() {
       if (response.ok) {
         const data = await response.json();
         
-        // Format data with async mapping to get enemy names
-        const formattedData = await Promise.all(data.map(async match => {
+        // Sort data so newest challenge (highest ID) is always at the top
+        const sortedData = data.sort((a, b) => b.id - a.id);
+
+        const formattedData = await Promise.all(sortedData.map(async (match) => {
           // Support both new backend (challenger_id) and old backend (sender_username)
           const isChallenger = match.challenger_id === profile?.id || match.sender_username === profile?.username;
           const enemyId = isChallenger ? match.opponent_id : match.challenger_id;

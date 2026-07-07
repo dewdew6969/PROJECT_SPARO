@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-export default function CustomConfirm({ visible, title, message, onCancel, onConfirm, cancelText = 'Cancel', confirmText = 'Confirm', confirmColor = '#FF4747' }) {
+export default function CustomConfirm({ visible, title, message, onCancel, onConfirm, cancelText = 'Cancel', confirmText = 'Confirm', confirmColor = '#FF4747', confirmTextColor = '#FFFFFF' }) {
   return (
     <Modal
       transparent={true}
@@ -20,7 +20,7 @@ export default function CustomConfirm({ visible, title, message, onCancel, onCon
             </TouchableOpacity>
             
             <TouchableOpacity style={[styles.confirmButton, { backgroundColor: confirmColor }]} onPress={onConfirm}>
-              <Text style={styles.confirmButtonText}>{confirmText}</Text>
+              <Text style={[styles.confirmButtonText, { color: confirmTextColor }]}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>

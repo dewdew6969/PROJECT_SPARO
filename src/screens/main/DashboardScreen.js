@@ -1,5 +1,5 @@
 import React, { useContext, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Animated, Modal, Dimensions, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Animated, Modal, Dimensions, RefreshControl, Alert, ImageBackground, LayoutAnimation } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -69,7 +69,12 @@ export default function DashboardScreen({ navigation }) {
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState(null);
   
+  // Mencegah polling server mengembalikan turnamen yang sudah kita hapus secara lokal
+  const deletedTournamentIds = useRef(new Set()).current;
+  
   const [registerAlertVisible, setRegisterAlertVisible] = useState(false);
+  const [genericAlertVisible, setGenericAlertVisible] = useState(false);
+  const [genericAlertContent, setGenericAlertContent] = useState({ title: '', message: '' });
   const [registeredTournament, setRegisteredTournament] = useState(null);
   const [registeredTournamentIds, setRegisteredTournamentIds] = useState([]);
   const [apiHasUnread, setApiHasUnread] = useState(false);
@@ -123,6 +128,12 @@ export default function DashboardScreen({ navigation }) {
       const response = await fetch(`${API_URL}/opponents/?${queryParams.toString()}`);
       if (response.ok) {
          const data = await response.json();
+         // Update own profile dynamically so stats (wins, losses) are always fresh
+         const me = data.find(u => u.id === profile?.id);
+         if (me) {
+           useAppStore.getState().updateProfile({ matches: me.matches, wins: me.wins, losses: me.losses, elo: me.elo });
+         }
+         
          // Filter diri sendiri
          const filtered = data.filter(u => u.id !== profile?.id);
          setOpponents(filtered);
@@ -140,10 +151,18 @@ export default function DashboardScreen({ navigation }) {
   const fetchTournaments = async () => {
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const response = await fetch(`${API_URL}/tournaments/`);
+      const response = await fetch(`${API_URL}/tournaments/?t=${new Date().getTime()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': 0
+        }
+      });
       if (response.ok) {
          const data = await response.json();
-         setTournaments(data || []);
+         // Filter out any tournaments we've deleted locally or already COMPLETED to avoid stale cache from server
+         const safeData = (data || []).filter(t => t.status !== 'COMPLETED' && !deletedTournamentIds.has(t.id));
+         setTournaments(safeData);
       }
     } catch (err) {
       console.error('Failed to fetch tournaments:', err);
@@ -185,17 +204,42 @@ export default function DashboardScreen({ navigation }) {
     
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const res = await fetch(`${API_URL}/tournaments/${tournamentToDelete.id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/tournaments/${tournamentToDelete.id}/complete`, { method: 'PUT' });
       if (res.ok) {
-        if (Platform.OS === 'android') {
-          import('react-native').then(({ ToastAndroid }) => ToastAndroid.show('Tournament deleted', ToastAndroid.SHORT));
-        }
-        fetchTournaments();
+        // Hapus Toast Android yang kaku
+        // Tampilkan Custom Alert yang indah dengan bahasa yang lebih profesional
+        const successTitle = t('tournament_completed_success') || 'Selesai';
+        const successMsg = (t('tournament_completed_msg') || 'Turnamen telah diselesaikan dan disembunyikan dari beranda.').replace('{title}', tournamentToDelete.title);
+        
+        setGenericAlertContent({ 
+          title: successTitle, 
+          message: successMsg
+        });
+        setGenericAlertVisible(true);
+
+        // Tambahkan animasi smooth (tidak nge-blink/klip)
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        
+        // Tandai ID ini sebagai dihapus agar tidak muncul lagi saat polling server (interval 5 detik)
+        deletedTournamentIds.add(tournamentToDelete.id);
+
+        // Optimistic update agar card LANGSUNG hilang dengan animasi
+        setTournaments(prev => prev.filter(t => t.id !== tournamentToDelete.id));
+        // Sengaja TIDAK memanggil fetchTournaments() di sini agar tidak tertimpa cache lama server
       } else {
-        alert('Failed to delete tournament');
+        setGenericAlertContent({ 
+          title: t('delete_failed_title') || 'Gagal Menghapus', 
+          message: t('delete_failed_message') || 'Turnamen gagal dihapus. Mungkin data sudah terhapus sebelumnya atau terjadi gangguan jaringan.' 
+        });
+        setGenericAlertVisible(true);
       }
     } catch (e) {
       console.error(e);
+      setGenericAlertContent({ 
+        title: t('delete_failed_title') || 'Gagal Menghapus', 
+        message: t('delete_failed_message') || 'Turnamen gagal dihapus. Mungkin data sudah terhapus sebelumnya atau terjadi gangguan jaringan.' 
+      });
+      setGenericAlertVisible(true);
     }
   };
 
@@ -567,30 +611,83 @@ export default function DashboardScreen({ navigation }) {
                 { bgColor: '#FF9EAA', textColor: '#000', icon: 'star' }
               ];
               const theme = colorThemes[index % colorThemes.length];
+              const isBungah = title.toLowerCase().includes('bungah');
+              const is3x3 = title.toLowerCase().includes('3x3');
+              const hasImage = isBungah || is3x3 || tourney.image;
+              
+              let imageSource = null;
+              let imagePosition = "center";
+              
+              const GLOBAL_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+              if (tourney.image) {
+                const cleanBaseUrl = GLOBAL_API_URL.endsWith('/') ? GLOBAL_API_URL.slice(0, -1) : GLOBAL_API_URL;
+                const cleanImagePath = tourney.image.startsWith('/') ? tourney.image.substring(1) : tourney.image;
+                imageSource = { uri: encodeURI(`${cleanBaseUrl}/${cleanImagePath}`) };
+              } else if (is3x3) {
+                imageSource = require('../../../assets/images/3x3-cup.png');
+                imagePosition = "top";
+              } else if (isBungah) {
+                imageSource = require('../../../assets/images/bungah-cup.png');
+                imagePosition = "center";
+              }
 
               return (
                 <TouchableOpacity 
                   key={tourney.id || index} 
-                  style={[styles.tournamentCard, { borderColor: theme.bgColor + '40', shadowColor: theme.bgColor }]} 
+                  style={[styles.tournamentCard, { borderColor: theme.bgColor + '40', shadowColor: theme.bgColor, opacity: (isRegistered || isFull) ? 0.7 : 1 }]} 
                   activeOpacity={0.8}
-                  disabled={isRegistered || isFull}
-                  onPress={() => handleRegisterTournament(tourney.id, title)}
+                  onPress={() => {
+                    if (isRegistered) {
+                      setGenericAlertContent({ 
+                        title: t('notification') || 'Pemberitahuan', 
+                        message: t('already_registered') || 'Anda sudah terdaftar di turnamen ini!' 
+                      });
+                      setGenericAlertVisible(true);
+                    } else if (isFull) {
+                      setGenericAlertContent({ 
+                        title: t('notification') || 'Pemberitahuan', 
+                        message: t('tournament_full') || 'Maaf, slot untuk turnamen ini sudah penuh!' 
+                      });
+                      setGenericAlertVisible(true);
+                    } else {
+                      handleRegisterTournament(tourney.id, title);
+                    }
+                  }}
                   onLongPress={() => handleDeleteTournament(tourney.id, title)}
                 >
-                  <LinearGradient 
-                    colors={['#1C2433', '#10151F']} 
-                    style={styles.tournamentImagePlaceholder}
-                  >
-                    <View style={styles.badgesContainer}>
-                      <View style={[styles.openNowBadge, { backgroundColor: theme.bgColor }]}>
-                        <Text style={[styles.openNowText, { color: theme.textColor }]}>{type}</Text>
-                      </View>
-                      <View style={[styles.sportBadge, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                        <Text style={styles.sportBadgeText}>{sport.toUpperCase()}</Text>
+                  {hasImage ? (
+                    <View style={styles.tournamentImagePlaceholder}>
+                      <Image
+                        source={imageSource}
+                        style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: 16, borderTopRightRadius: 16 }]}
+                        contentFit="cover"
+                        contentPosition={imagePosition}
+                      />
+                      <View style={styles.badgesContainer}>
+                        <View style={[styles.openNowBadge, { backgroundColor: theme.bgColor }]}>
+                          <Text style={[styles.openNowText, { color: theme.textColor }]}>{type}</Text>
+                        </View>
+                        <View style={[styles.sportBadge, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                          <Text style={styles.sportBadgeText}>{sport.toUpperCase()}</Text>
+                        </View>
                       </View>
                     </View>
-                    <Feather name={theme.icon} size={48} color="rgba(255,255,255,0.03)" style={{ position: 'absolute' }} />
-                  </LinearGradient>
+                  ) : (
+                    <LinearGradient 
+                      colors={['#1C2433', '#10151F']} 
+                      style={styles.tournamentImagePlaceholder}
+                    >
+                      <View style={styles.badgesContainer}>
+                        <View style={[styles.openNowBadge, { backgroundColor: theme.bgColor }]}>
+                          <Text style={[styles.openNowText, { color: theme.textColor }]}>{type}</Text>
+                        </View>
+                        <View style={[styles.sportBadge, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                          <Text style={styles.sportBadgeText}>{sport.toUpperCase()}</Text>
+                        </View>
+                      </View>
+                      <Feather name={theme.icon} size={48} color="rgba(255,255,255,0.03)" style={{ position: 'absolute' }} />
+                    </LinearGradient>
+                  )}
                   
                   <View style={styles.tournamentInfo}>
                     <Text style={styles.tournamentTitle} numberOfLines={1}>{title}</Text>
@@ -703,19 +800,28 @@ export default function DashboardScreen({ navigation }) {
 
         <CustomConfirm
           visible={deleteConfirmVisible}
-          title={'Batalkan Turnamen'}
-          message={`Apakah Anda yakin ingin membatalkan turnamen "${tournamentToDelete?.title}"? Tindakan ini tidak dapat dibatalkan.`}
+          title={t('confirm_complete_tournament_title') || 'Selesaikan Turnamen'}
+          message={(t('confirm_complete_tournament_msg') || `Apakah Anda ingin mengonfirmasi penyelesaian turnamen "{title}"?`).replace('{title}', tournamentToDelete?.title || '')}
           onCancel={() => setDeleteConfirmVisible(false)}
           onConfirm={executeDeleteTournament}
-          confirmText={'HAPUS'}
-          cancelText={'BATAL'}
+          confirmText={t('confirm_complete_tournament_yes') || 'KONFIRMASI'}
+          cancelText={t('confirm_complete_tournament_no') || 'BATAL'}
+          confirmColor="#D4FF00"
+          confirmTextColor="#0F1522"
         />
 
         <CustomAlert
           visible={registerAlertVisible}
-          title="Registrasi Berhasil! 🎉"
-          message={`Anda telah terdaftar di turnamen "${registeredTournament}". Siapkan fisik dan mental Anda, jadwal lengkap pertandingan akan segera dikirimkan ke email Anda.`}
+          title={t('registration_success') || "Pendaftaran Berhasil"}
+          message={`${t('registered_tournament_prefix') || "Anda telah resmi terdaftar dalam turnamen"} "${registeredTournament}". ${t('registered_tournament_suffix') || "Jadwal lengkap pertandingan beserta informasi lanjutan akan segera dikirimkan ke email Anda."}`}
           onClose={() => setRegisterAlertVisible(false)}
+        />
+
+        <CustomAlert
+          visible={genericAlertVisible}
+          title={genericAlertContent.title}
+          message={genericAlertContent.message}
+          onClose={() => setGenericAlertVisible(false)}
         />
 
       </LinearGradient>

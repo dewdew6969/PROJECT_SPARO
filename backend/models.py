@@ -89,6 +89,9 @@ class Tournament(Base):
     date = Column(DateTime)
     location = Column(String(255))
     max_participants = Column(Integer)
+    image = Column(String(255), nullable=True)
+    status = Column(String(50), default="UPCOMING")
+    prize = Column(String(255), nullable=True, default="Trophy & Cash")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class TournamentRegistration(Base):

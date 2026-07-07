@@ -108,7 +108,7 @@ export default function MainTabNavigator() {
       screenOptions={({ route }) => ({
         headerShown: false,
         swipeEnabled: false,
-        animationEnabled: false,
+        animationEnabled: true,
         tabBarIcon: ({ color }) => {
           let iconName;
           if (route.name === 'Home') iconName = 'home';

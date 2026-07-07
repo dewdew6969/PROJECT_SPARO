@@ -74,23 +74,6 @@ const SparoTheme = {
 export default function App() {
   const profile = useAppStore(state => state.profile);
   const responseListener = useRef();
-  const [isSplashVisible, setIsSplashVisible] = useState(true);
-
-  // Memaksa Custom Splash Screen tampil 5 detik agar loading lebih mulus
-  useEffect(() => {
-    const hideNativeSplash = async () => {
-      try {
-        await SplashScreen.hideAsync();
-      } catch (e) {}
-    };
-    // Sembunyikan native splash screen secepatnya karena kita punya Custom JS Splash
-    hideNativeSplash();
-
-    const timer = setTimeout(() => {
-      setIsSplashVisible(false);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     if (profile?.id) {
@@ -152,18 +135,6 @@ export default function App() {
       subscription.remove();
     };
   }, [profile]);
-
-  if (isSplashVisible) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
-        <Image 
-          source={require('./assets/images/icon.png')} 
-          style={{ width: 250, height: 250, resizeMode: 'contain' }} 
-        />
-        <ActivityIndicator size="large" color="#D4FF00" style={{ position: 'absolute', bottom: '15%' }} />
-      </View>
-    );
-  }
 
   return (
     <SafeAreaProvider>

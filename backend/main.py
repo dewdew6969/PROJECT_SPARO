@@ -499,6 +499,27 @@ def submit_score(challenge_id: int, user_id: int, my_score: int, opponent_score:
         challenge.status = "awaiting_verification"
     else:
         challenge.status = "COMPLETED"
+        challenger = db.query(models.User).filter(models.User.id == challenge.challenger_id).first()
+        opponent = db.query(models.User).filter(models.User.id == challenge.opponent_id).first()
+        if challenger and opponent:
+            if challenge.challenger_score > challenge.opponent_score:
+                challenge.winner_id = challenge.challenger_id
+                score_a = 1
+            elif challenge.opponent_score > challenge.challenger_score:
+                challenge.winner_id = challenge.opponent_id
+                score_a = 0
+            else:
+                challenge.winner_id = None
+                score_a = 0.5
+                
+            challenger.matches += 1
+            opponent.matches += 1
+            if score_a == 1:
+                challenger.wins += 1
+                opponent.losses += 1
+            elif score_a == 0:
+                opponent.wins += 1
+                challenger.losses += 1
 
     db.commit()
     db.refresh(challenge)
@@ -527,6 +548,16 @@ def confirm_score(challenge_id: int, user_id: int, is_agreed: bool, db: Session 
                 new_c_elo, new_o_elo = calculate_elo(challenger.elo, opponent.elo, score_a)
                 challenger.elo = max(0, new_c_elo)
                 opponent.elo = max(0, new_o_elo)
+                
+                # Update matches, wins, losses
+                challenger.matches += 1
+                opponent.matches += 1
+                if score_a == 1:
+                    challenger.wins += 1
+                    opponent.losses += 1
+                elif score_a == 0:
+                    opponent.wins += 1
+                    challenger.losses += 1
     else:
         challenge.is_conflict = True
         challenge.status = "CONFLICT"
@@ -777,7 +808,7 @@ def update_push_token(user_id: int, token_data: schemas.PushTokenUpdate, db: Ses
 
 @app.get("/tournaments/", response_model=List[schemas.Tournament])
 def read_tournaments(db: Session = Depends(get_db)):
-    return db.query(models.Tournament).order_by(models.Tournament.date.asc()).all()
+    return db.query(models.Tournament).filter(models.Tournament.status == "UPCOMING").order_by(models.Tournament.date.asc()).all()
 
 @app.post("/tournaments/", response_model=schemas.Tournament)
 def create_tournament(tournament: schemas.TournamentCreate, db: Session = Depends(get_db)):
@@ -786,6 +817,29 @@ def create_tournament(tournament: schemas.TournamentCreate, db: Session = Depend
     db.commit()
     db.refresh(db_tournament)
     return db_tournament
+
+@app.post("/tournaments/{tournament_id}/upload-poster")
+def upload_tournament_poster(tournament_id: int, request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_tournament = db.query(models.Tournament).filter(models.Tournament.id == tournament_id).first()
+    if not db_tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+        
+    upload_dir = UPLOADS_DIR / "tournaments"
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    import time, shutil
+    file_path = f"{tournament_id}_{int(time.time())}_{file.filename}"
+    absolute_file_path = str(upload_dir / file_path)
+    
+    with open(absolute_file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    db_tournament.image = f"uploads/tournaments/{file_path}"
+    db.commit()
+    db.refresh(db_tournament)
+    
+    return {"message": "Poster uploaded successfully", "image": db_tournament.image}
+
 
 @app.delete("/tournaments/{tournament_id}")
 def delete_tournament(tournament_id: int, db: Session = Depends(get_db)):
@@ -799,6 +853,16 @@ def delete_tournament(tournament_id: int, db: Session = Depends(get_db)):
     db.delete(db_tournament)
     db.commit()
     return {"message": "Tournament deleted successfully"}
+
+@app.put("/tournaments/{tournament_id}/complete")
+def complete_tournament(tournament_id: int, db: Session = Depends(get_db)):
+    db_tournament = db.query(models.Tournament).filter(models.Tournament.id == tournament_id).first()
+    if not db_tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+        
+    db_tournament.status = "COMPLETED"
+    db.commit()
+    return {"message": "Tournament marked as completed"}
 
 @app.post("/tournaments/{tournament_id}/register")
 def register_tournament(tournament_id: int, username: str, db: Session = Depends(get_db)):
@@ -847,3 +911,45 @@ def get_registered_tournaments(username: str, db: Session = Depends(get_db)):
         return [reg.tournament_id for reg in registrations]
     except Exception as e:
         return [] # Return empty if table doesn't exist yet
+
+@app.get("/recalculate-stats")
+def recalculate_stats(db: Session = Depends(get_db)):
+    users = db.query(models.User).all()
+    # Reset all stats to 0
+    for user in users:
+        user.matches = 0
+        user.wins = 0
+        user.losses = 0
+    db.commit()
+
+    # Recalculate based on COMPLETED challenges
+    challenges = db.query(models.Challenge).filter(models.Challenge.status == "COMPLETED").all()
+    for challenge in challenges:
+        challenger = db.query(models.User).filter(models.User.id == challenge.challenger_id).first()
+        opponent = db.query(models.User).filter(models.User.id == challenge.opponent_id).first()
+        
+        if challenger and opponent:
+            challenger.matches += 1
+            opponent.matches += 1
+            if challenge.winner_id == challenger.id:
+                challenger.wins += 1
+                opponent.losses += 1
+            elif challenge.winner_id == opponent.id:
+                opponent.wins += 1
+                challenger.losses += 1
+
+    db.commit()
+    return {"message": "Statistik pertandingan (matches, wins, losses) semua pengguna telah berhasil dikalkulasi ulang berdasarkan riwayat."}
+
+@app.get("/migrate-prize")
+def migrate_prize(db: Session = Depends(get_db)):
+    from sqlalchemy import text
+    try:
+        db.execute(text("ALTER TABLE tournaments ADD COLUMN prize VARCHAR(255) DEFAULT 'Trophy & Cash';"))
+        db.commit()
+        return {"message": "SUKSES: Kolom 'prize' berhasil ditambahkan ke database!"}
+    except Exception as e:
+        db.rollback()
+        if "Duplicate column name" in str(e):
+            return {"message": "INFO: Kolom 'prize' sudah ada di database. Aman!"}
+        return {"error": str(e)}

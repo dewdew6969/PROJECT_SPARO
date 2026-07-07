@@ -121,9 +121,13 @@ class TournamentCreate(BaseModel):
     date: datetime
     location: str
     max_participants: int
+    status: Optional[str] = "UPCOMING"
+    prize: Optional[str] = "Trophy & Cash"
+    image: Optional[str] = None
 
 class Tournament(TournamentCreate):
     id: int
+    image: Optional[str] = None
     created_at: datetime
 
     class Config:
