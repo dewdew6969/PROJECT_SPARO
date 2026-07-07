@@ -11,8 +11,18 @@
     "ios": {
       "icon": "./assets/images/logo-sparo-padded.png"
     },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#CCFF00"
+    },
     "android": {
       "package": "com.dewapermana.sparo",
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDummyKeyHereToPreventStartupCrash"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/logo-sparo-padded.png",
@@ -55,6 +65,7 @@
       "eas": {
         "projectId": "0c0a6460-5979-4a4d-98f4-1cc3ba1db14f"
       }
-    }
+    },
+    "owner": "alfi0802"
   }
 }

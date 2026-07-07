@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "179468810307",
+    "project_id": "sparo-79fa5",
+    "storage_bucket": "sparo-79fa5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:179468810307:android:a61292f8b4c0b5fea27cf6",
+        "android_client_info": {
+          "package_name": "com.dewapermana.sparo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDekTs01KSkz7H71NR2Qrdrze6MzaCiP5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
