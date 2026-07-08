@@ -235,7 +235,15 @@ export const extraTranslations = {
     map_view: '地图视图',
     no_venue_selected: '未选择场地',
     pick_location_desc: '点击以选择位置',
-    custom_pin: '自定义引脚'
+    custom_pin: '自定义引脚',
+    confirm_ocr_title: '确认 OCR AI',
+    confirm_ocr_msg: '您确定要上传此照片吗？Gemini AI 将自动扫描分数，确定获胜者，并永久更新 ELO 评级。',
+    ocr_error_msg: '处理 AI 失败：\n',
+    ocr_result_msg: 'AI 检测结果：\n挑战者分数：{c}\n对手分数：{o}\n\n{conclusion}\n\n根据此分数，比赛已自动完成。ELO 和统计数据已更新。',
+    server_msg: '\n\n服务器消息：',
+    match_completed_title: '比赛已完成',
+    success: '成功',
+    error_title: '错误'
   },
   'Español': {
     prize_placeholder: 'Ingrese el premio (ej: Medalla de Oro)',
@@ -473,7 +481,15 @@ export const extraTranslations = {
     map_view: 'Vista del Mapa',
     no_venue_selected: 'Ninguna Sede Seleccionada',
     pick_location_desc: 'Toca para elegir una ubicación',
-    custom_pin: 'Pin Personalizado'
+    custom_pin: 'Pin Personalizado',
+    confirm_ocr_title: 'Confirmar OCR de IA',
+    confirm_ocr_msg: '¿Estás seguro de que deseas subir esta foto? La IA Gemini escaneará automáticamente la puntuación, determinará al ganador y actualizará permanentemente el ELO Rating.',
+    ocr_error_msg: 'Error al procesar la IA:\n',
+    ocr_result_msg: 'Resultado de la Detección de IA:\nPuntuación del Retador: {c}\nPuntuación del Oponente: {o}\n\n{conclusion}\n\nEl partido se ha completado automáticamente según esta puntuación. Se han actualizado ELO y estadísticas.',
+    server_msg: '\n\nMensaje del Servidor: ',
+    match_completed_title: 'Partido Completado',
+    success: 'Éxito',
+    error_title: 'Error'
   },
   'Français': {
     prize_placeholder: 'Entrer le prix (ex: Médaille d\'or)',
@@ -711,6 +727,14 @@ export const extraTranslations = {
     map_view: 'Vue de la Carte',
     no_venue_selected: 'Aucun Lieu Sélectionné',
     pick_location_desc: 'Appuyez pour choisir un lieu',
-    custom_pin: 'Épingle Personnalisée'
+    custom_pin: 'Épingle Personnalisée',
+    confirm_ocr_title: 'Confirmer l\'IA OCR',
+    confirm_ocr_msg: 'Êtes-vous sûr de vouloir télécharger cette photo ? L\'IA Gemini analysera automatiquement le score, déterminera le gagnant et mettra à jour le classement ELO de manière permanente.',
+    ocr_error_msg: 'Échec du traitement de l\'IA :\n',
+    ocr_result_msg: 'Résultat de Détection de l\'IA :\nScore du Challenger : {c}\nScore de l\'Adversaire : {o}\n\n{conclusion}\n\nLe match a été automatiquement terminé sur la base de ce score. L\'ELO et les statistiques ont été mis à jour.',
+    server_msg: '\n\nMessage du Serveur : ',
+    match_completed_title: 'Match Terminé',
+    success: 'Succès',
+    error_title: 'Erreur'
   }
 };

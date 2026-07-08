@@ -76,10 +76,10 @@ export default function ChatListScreen({ navigation }) {
     if (isFocused) {
       fetchChats();
       
-      // Fallback polling to keep chat list real-time (1 detik)
+      // Fallback polling to keep chat list real-time (3 detik)
       pollInterval = setInterval(() => {
         fetchChats();
-      }, 1000);
+      }, 3000);
     }
     
     return () => {

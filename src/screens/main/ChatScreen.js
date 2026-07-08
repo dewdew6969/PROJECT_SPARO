@@ -127,10 +127,10 @@ export default function ChatScreen({ navigation, route }) {
     
     fetchHistoryAndStatus();
     
-    // 3. Fallback: HTTP Polling (Setiap 1 detik)
+    // 3. Fallback: HTTP Polling (Setiap 3 detik, cukup responsif tapi tidak membebani CPU)
     const pollInterval = setInterval(() => {
       fetchHistoryAndStatus();
-    }, 1000);
+    }, 3000);
     
     if (chatRooms[roomId] && chatRooms[roomId].length > 0) {
       markRoomAsRead(roomId);

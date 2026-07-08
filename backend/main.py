@@ -19,6 +19,10 @@ import models, schemas, auth
 from database import engine, get_db, SessionLocal
 import asyncio
 
+import google.generativeai as genai
+from PIL import Image as PILImage
+import json
+
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 465))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "sparoofficial2026@gmail.com")
@@ -346,6 +350,7 @@ def get_leaderboard(lat: float = None, lon: float = None, scope: str = 'national
             win_rate_val = round((user.wins / user.matches) * 100)
             win_rate = f"{win_rate_val}%"
         else:
+            win_rate_val = 0
             win_rate = "0%"
             
         leaderboard.append({
@@ -354,15 +359,17 @@ def get_leaderboard(lat: float = None, lon: float = None, scope: str = 'national
             "full_name": user.full_name,
             "avatar": user.avatar,
             "elo": user.elo,
-            "win_rate": win_rate
+            "win_rate": win_rate,
+            "win_rate_val": win_rate_val
         })
         
-    # Sort by elo descending
-    leaderboard.sort(key=lambda x: x['elo'], reverse=True)
+    # Sort by elo descending, then win_rate_val descending
+    leaderboard.sort(key=lambda x: (x['elo'], x['win_rate_val']), reverse=True)
     
-    # Assign ranks
+    # Assign ranks and remove the temporary win_rate_val
     for i, user_dict in enumerate(leaderboard):
         user_dict['rank'] = i + 1
+        user_dict.pop('win_rate_val', None)
         
     return leaderboard
 
@@ -496,7 +503,10 @@ def submit_score(challenge_id: int, user_id: int, my_score: int, opponent_score:
         raise HTTPException(status_code=403, detail="Akses ditolak")
         
     if challenge.is_competitive:
-        challenge.status = "awaiting_verification"
+        if challenge.challenger_id == user_id:
+            challenge.status = "awaiting_opponent_verification"
+        else:
+            challenge.status = "awaiting_challenger_verification"
     else:
         challenge.status = "COMPLETED"
         challenger = db.query(models.User).filter(models.User.id == challenge.challenger_id).first()
@@ -562,8 +572,22 @@ def confirm_score(challenge_id: int, user_id: int, is_agreed: bool, db: Session 
         challenge.is_conflict = True
         challenge.status = "CONFLICT"
     db.commit()
-    db.refresh(challenge)
-    return {"message": "Konfirmasi berhasil", "challenge": challenge}
+    
+    stats_data = {}
+    if is_agreed and challenge.challenger_score is not None and challenge.opponent_score is not None:
+        challenger = db.query(models.User).filter(models.User.id == challenge.challenger_id).first()
+        opponent = db.query(models.User).filter(models.User.id == challenge.opponent_id).first()
+        if challenger and opponent:
+            stats_data = {
+                "challenger": {
+                    "id": challenger.id, "elo": challenger.elo, "wins": challenger.wins, "losses": challenger.losses, "matches": challenger.matches
+                },
+                "opponent": {
+                    "id": opponent.id, "elo": opponent.elo, "wins": opponent.wins, "losses": opponent.losses, "matches": opponent.matches
+                }
+            }
+            
+    return {"message": "Konfirmasi skor berhasil", "challenge": challenge, "stats": stats_data}
 
 @app.post("/challenges/{challenge_id}/upload-proof")
 def upload_proof(challenge_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -576,8 +600,104 @@ def upload_proof(challenge_id: int, file: UploadFile = File(...), db: Session = 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     challenge.proof_image_url = file_path
+    
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+    ocr_result = None
+    
+    if gemini_api_key:
+        try:
+            genai.configure(api_key=gemini_api_key)
+            model = genai.GenerativeModel('gemini-3.5-flash')
+            
+            challenger = db.query(models.User).filter(models.User.id == challenge.challenger_id).first()
+            opponent = db.query(models.User).filter(models.User.id == challenge.opponent_id).first()
+            
+            c_name = challenger.username if challenger else "Challenger"
+            o_name = opponent.username if opponent else "Opponent"
+
+            img = PILImage.open(file_path)
+            
+            prompt = f"""
+            Gambar ini adalah bukti papan skor pertandingan olahraga. 
+            Nama Pemain A: {c_name}
+            Nama Pemain B: {o_name}
+            Tugas Anda: Deteksi angka skor untuk masing-masing pemain dengan melihat posisi nama mereka di papan (kiri/kanan) atau teks terdekat.
+            Kembalikan hasil dalam format MURNI JSON (tanpa tag markdown) dengan struktur:
+            {{
+                "challenger": angka_skor_c_name,
+                "opponent": angka_skor_o_name,
+                "detected_positions": {{
+                    "{c_name}": "Left/Right/Top/Bottom",
+                    "{o_name}": "Left/Right/Top/Bottom"
+                }},
+                "conclusion": "kalimat singkat kesimpulan"
+            }}
+            Jika tidak ditemukan, kembalikan skor 0.
+            """
+            
+            response = model.generate_content([prompt, img])
+            response_text = response.text.replace("```json", "").replace("```", "").strip()
+            
+            ocr_result = json.loads(response_text)
+            
+            # Auto-update score & ELO
+            if "challenger" in ocr_result and "opponent" in ocr_result:
+                c_score = int(ocr_result["challenger"])
+                o_score = int(ocr_result["opponent"])
+                
+                challenge.challenger_score = c_score
+                challenge.opponent_score = o_score
+                challenge.status = "COMPLETED"
+                challenge.is_conflict = False
+                
+                if c_score > o_score:
+                    challenge.winner_id = challenger.id
+                    score_a = 1
+                elif o_score > c_score:
+                    challenge.winner_id = opponent.id
+                    score_a = 0
+                else:
+                    challenge.winner_id = None
+                    score_a = 0.5
+                    
+                new_c_elo, new_o_elo = calculate_elo(challenger.elo, opponent.elo, score_a)
+                challenger.elo = max(0, new_c_elo)
+                opponent.elo = max(0, new_o_elo)
+                
+                challenger.matches += 1
+                opponent.matches += 1
+                if score_a == 1:
+                    challenger.wins += 1
+                    opponent.losses += 1
+                elif score_a == 0:
+                    opponent.wins += 1
+                    challenger.losses += 1
+        except Exception as e:
+            print("Gemini AI Error:", e)
+            ocr_result = {"error": f"Gagal memproses AI: {str(e)}"}
+    else:
+        ocr_result = {"error": "API Key Gemini belum disetel di server (set variabel GEMINI_API_KEY)."}
+        
     db.commit()
-    return {"message": "Bukti berhasil diunggah", "file_path": file_path}
+    
+    # Retrieve updated stats to send back
+    stats_data = {}
+    if "challenger" in ocr_result and "opponent" in ocr_result and challenger and opponent:
+        stats_data = {
+            "challenger": {
+                "id": challenger.id, "elo": challenger.elo, "wins": challenger.wins, "losses": challenger.losses, "matches": challenger.matches
+            },
+            "opponent": {
+                "id": opponent.id, "elo": opponent.elo, "wins": opponent.wins, "losses": opponent.losses, "matches": opponent.matches
+            }
+        }
+
+    return {
+        "message": "Bukti berhasil diunggah", 
+        "file_path": file_path,
+        "ocr_result": ocr_result,
+        "stats": stats_data
+    }
 
 @app.post("/tournaments/", response_model=schemas.Tournament)
 def create_tournament(tournament: schemas.TournamentCreate, db: Session = Depends(get_db)):

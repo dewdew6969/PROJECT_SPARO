@@ -5,11 +5,11 @@
     "version": "1.0.0",
     "newArchEnabled": true,
     "orientation": "portrait",
-    "icon": "./assets/images/logo-sparo-padded.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "sparo",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/logo-sparo-padded.png"
+      "icon": "./assets/images/icon.png"
     },
     "notification": {
       "icon": "./assets/images/notification-icon.png",
@@ -25,7 +25,7 @@
       },
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/logo-sparo-padded.png",
+        "foregroundImage": "./assets/images/icon.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -66,6 +66,6 @@
         "projectId": "0c0a6460-5979-4a4d-98f4-1cc3ba1db14f"
       }
     },
-    "owner": "alfi0802"
+    "owner": "dewapermana"
   }
 }

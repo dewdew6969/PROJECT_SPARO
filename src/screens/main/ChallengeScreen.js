@@ -7,6 +7,9 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import useAppStore from '../../store/useAppStore';
+import CustomConfirm from '../../components/CustomConfirm';
+
+const nameCache = {}; // Global cache to prevent massive API flooding
 
 export default function ChallengeScreen({ navigation }) {
   const { t, profile, setPendingMatchesCount } = useAppStore();
@@ -16,8 +19,11 @@ export default function ChallengeScreen({ navigation }) {
   const [pendingMatches, setPendingMatches] = useState([]);
   const [acceptedMatches, setAcceptedMatches] = useState([]);
   const [completedMatches, setCompletedMatches] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // State for confirm modal
+  const [matchToAccept, setMatchToAccept] = useState(null);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -30,7 +36,7 @@ export default function ChallengeScreen({ navigation }) {
       const cacheKey = `challenges_${profile.id}`;
       // 1. FAST CACHE LOAD (Optimistic UI)
       const cached = await AsyncStorage.getItem(cacheKey);
-      if (cached) {
+      if (cached && isLoading) {
          const parsed = JSON.parse(cached);
          const loadedPending = parsed.pending || [];
          setPendingMatches(loadedPending);
@@ -58,10 +64,15 @@ export default function ChallengeScreen({ navigation }) {
 
           try {
             if (enemyId) {
-              const userRes = await fetch(`${API_URL}/users/${enemyId}`);
-              if (userRes.ok) {
-                const userData = await userRes.json();
-                name = userData.full_name || userData.username || name;
+              if (nameCache[enemyId]) {
+                name = nameCache[enemyId];
+              } else {
+                const userRes = await fetch(`${API_URL}/users/${enemyId}`);
+                if (userRes.ok) {
+                  const userData = await userRes.json();
+                  name = userData.full_name || userData.username || name;
+                  nameCache[enemyId] = name;
+                }
               }
             }
             // Fallback to raw username if ID is missing (old backend schema)
@@ -82,33 +93,42 @@ export default function ChallengeScreen({ navigation }) {
               const endTime = endDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
               fullDateStr = `${baseDateStr}, ${startTime} - ${endTime}`;
           }
-          
           return {
             id: match.id,
+            challenger_id: match.challenger_id,
+            opponent_id: match.opponent_id,
             name: name,
             sport: match.sport + (match.is_competitive ? ' • Competitive' : ' • Friendly'),
             date: fullDateStr,
             venue: match.venue_name || match.location,
             status: match.status ? match.status.toLowerCase() : 'pending',
-            isIncoming: !isChallenger
+            isIncoming: !isChallenger,
+            challenger_score: match.challenger_score,
+            opponent_score: match.opponent_score,
+            challenger: match.challenger,
+            opponent: match.opponent
           };
         }));
 
-        const newPending = formattedData.filter(m => m.status === 'pending' && m.isIncoming);
-        const newAccepted = formattedData.filter(m => m.status === 'accepted' || (m.status === 'pending' && !m.isIncoming));
-        const newCompleted = formattedData.filter(m => m.status === 'completed' || m.status === 'rejected');
+        const newPending = formattedData.filter(m => m.status === 'pending');
+        const newAccepted = formattedData.filter(m => m.status === 'accepted');
+        const newCompleted = formattedData.filter(m => m.status === 'completed' || m.status === 'rejected' || m.status === 'awaiting_opponent_verification' || m.status === 'awaiting_challenger_verification' || m.status === 'awaiting_verification' || m.status === 'conflict');
 
-        setPendingMatches(newPending);
-        setPendingMatchesCount(newPending.length);
-        setAcceptedMatches(newAccepted);
-        setCompletedMatches(newCompleted);
-
-        // 2. SAVE LATEST TO CACHE (Silent Update)
-        await AsyncStorage.setItem(cacheKey, JSON.stringify({
+        const newCacheData = {
           pending: newPending,
           accepted: newAccepted,
           completed: newCompleted
-        }));
+        };
+        const newCacheStr = JSON.stringify(newCacheData);
+
+        // Hanya update state jika ada perubahan data dari server untuk mencegah layar berkedip
+        if (cached !== newCacheStr) {
+          setPendingMatches(newPending);
+          setPendingMatchesCount(newPending.length);
+          setAcceptedMatches(newAccepted);
+          setCompletedMatches(newCompleted);
+          await AsyncStorage.setItem(cacheKey, newCacheStr);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -119,14 +139,24 @@ export default function ChallengeScreen({ navigation }) {
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchChallenges();
+      let isActive = true;
+      let timeoutId = null;
+
+      const poll = async () => {
+        if (!isActive) return;
+        await fetchChallenges();
+        if (isActive) {
+          // Hanya mulai timer baru setelah fetch sebelumnya SELESAI
+          timeoutId = setTimeout(poll, 3000);
+        }
+      };
+
+      poll();
       
-      // Polling hanya berjalan saat tab Matches sedang dibuka/fokus
-      const intervalId = setInterval(() => {
-        fetchChallenges();
-      }, 15000);
-      
-      return () => clearInterval(intervalId);
+      return () => {
+        isActive = false;
+        if (timeoutId) clearTimeout(timeoutId);
+      };
     }, [profile?.id])
   );
 
@@ -146,8 +176,15 @@ export default function ChallengeScreen({ navigation }) {
     }
   };
 
-  const handleAccept = (match) => {
-    updateStatus(match.id, 'accepted');
+  const handleAcceptClick = (match) => {
+    setMatchToAccept(match);
+  };
+
+  const confirmAccept = () => {
+    if (matchToAccept) {
+      updateStatus(matchToAccept.id, 'accepted');
+      setMatchToAccept(null);
+    }
   };
 
   const handleReject = (id) => {
@@ -211,9 +248,15 @@ export default function ChallengeScreen({ navigation }) {
           {activeTab === 'pending' && pendingMatches.map(match => (
             <View key={match.id} style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.badgeWarning}><Text style={styles.badgeText}>{t('action_required')}</Text></View>
+                <View style={[styles.badgeWarning, !match.isIncoming && { backgroundColor: '#3b2f00' }]}>
+                  <Text style={[styles.badgeText, !match.isIncoming && { color: '#D4FF00' }]}>
+                    {match.isIncoming ? t('action_required') : 'WAITING FOR OPPONENT'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.challengeTitle}>{t('challenge_from')} {match.name}</Text>
+              <Text style={styles.challengeTitle}>
+                {match.isIncoming ? `${t('challenge_from')} ${match.name}` : `Challenge Sent to ${match.name}`}
+              </Text>
               <View style={styles.detailRow}>
                 <Feather name="activity" size={14} color="#8A95A5" />
                 <Text style={styles.detail}>{match.sport}</Text>
@@ -227,12 +270,20 @@ export default function ChallengeScreen({ navigation }) {
                 <Text style={styles.detail}>{match.venue}</Text>
               </View>
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.btnAccept} onPress={() => handleAccept(match)}>
-                  <Text style={styles.btnTextAccept}>{t('accept')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.btnReject} onPress={() => handleReject(match.id)}>
-                  <Text style={styles.btnTextReject}>{t('reject')}</Text>
-                </TouchableOpacity>
+                {match.isIncoming ? (
+                  <>
+                    <TouchableOpacity style={styles.btnAccept} onPress={() => handleAcceptClick(match)}>
+                      <Text style={styles.btnTextAccept}>{t('accept')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnReject} onPress={() => handleReject(match.id)}>
+                      <Text style={styles.btnTextReject}>{t('reject')}</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity style={[styles.btnReject, { flex: 1 }]} onPress={() => handleReject(match.id)}>
+                    <Text style={styles.btnTextReject}>Cancel Challenge</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           ))}
@@ -278,13 +329,23 @@ export default function ChallengeScreen({ navigation }) {
           {activeTab === 'completed' && completedMatches.map(match => (
             <View key={match.id} style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.badgeInfo}><Text style={styles.badgeTextInfo}>{t(match.status)}</Text></View>
+                <View style={[styles.badgeInfo, { backgroundColor: match.status.includes('awaiting') ? '#4A3B12' : '#1C2E4A' }]}>
+                  <Text style={[styles.badgeTextInfo, { color: match.status.includes('awaiting') ? '#FFD700' : '#A0BEFF' }]}>
+                    {match.status === 'awaiting_opponent_verification' 
+                      ? (match.isIncoming ? "KONFIRMASI SCORE" : "MENUNGGU KONFIRMASI")
+                      : match.status === 'awaiting_challenger_verification'
+                        ? (match.isIncoming ? "MENUNGGU KONFIRMASI" : "KONFIRMASI SCORE")
+                        : (t(match.status) || match.status).toUpperCase()}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.challengeTitle}>Vs {match.name}</Text>
               <Text style={[styles.detail, { marginBottom: 15 }]}>{match.sport}</Text>
-              {match.status === 'awaiting_verification' && (
+              {((match.status === 'awaiting_opponent_verification' && match.isIncoming) || 
+                (match.status === 'awaiting_challenger_verification' && !match.isIncoming) || 
+                match.status === 'conflict') && (
                 <TouchableOpacity style={styles.btnPrimary} onPress={() => navigateToVerification(match)}>
-                  <Text style={styles.btnTextPrimary}>{t('input_score')}</Text>
+                  <Text style={styles.btnTextPrimary}>{match.status === 'conflict' ? 'Selesaikan Konflik' : 'Konfirmasi Skor'}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -293,7 +354,18 @@ export default function ChallengeScreen({ navigation }) {
         </ScrollView>
       </LinearGradient>
 
-
+      {/* Confirmation Modal for Accepting Challenge */}
+      <CustomConfirm
+        visible={!!matchToAccept}
+        title="Terima Tantangan?"
+        message={matchToAccept ? `Apakah Anda yakin ingin menerima tantangan dari ${matchToAccept.name} untuk bertanding ${matchToAccept.sport}?` : ''}
+        confirmText="Terima"
+        cancelText="Batal"
+        confirmColor="#D4FF00"
+        confirmTextColor="#0F1522"
+        onCancel={() => setMatchToAccept(null)}
+        onConfirm={confirmAccept}
+      />
 
     </SafeAreaView>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, ScrollView, Platform, StatusBar, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Platform, StatusBar, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -48,9 +48,12 @@ export default function LeaderboardScreen() {
     setIsLoading(true);
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-      const lat = profile.latitude || '';
-      const lon = profile.longitude || '';
-      const response = await fetch(`${API_URL}/leaderboard/?lat=${lat}&lon=${lon}&scope=${activeTab}`);
+      let queryParams = `scope=${activeTab}`;
+      if (profile.latitude !== null && profile.longitude !== null && profile.latitude !== '' && profile.longitude !== '') {
+          queryParams += `&lat=${profile.latitude}&lon=${profile.longitude}`;
+      }
+      
+      const response = await fetch(`${API_URL}/leaderboard/?${queryParams}`);
       if (response.ok) {
         const data = await response.json();
         setLeaderboardData(data);
@@ -97,9 +100,11 @@ export default function LeaderboardScreen() {
           <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>{t('win_rate')}</Text>
         </View>
 
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
+        <FlatList
+          data={leaderboardData}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={{ paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -109,35 +114,38 @@ export default function LeaderboardScreen() {
               progressBackgroundColor="#161C26"
             />
           }
-        >
-          {isLoading && !refreshing ? (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#D4FF00" />
-            </View>
-          ) : leaderboardData.length === 0 ? (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <Text style={{ color: '#8A95A5', fontSize: 16 }}>Belum ada data peringkat di wilayah ini</Text>
-            </View>
-          ) : (
-            leaderboardData.map((item) => (
-              <View key={item.id} style={styles.row}>
-                <Text style={[styles.tdRank, { flex: 0.5 }]}>{item.rank}</Text>
-                <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
-                  {item.avatar ? (
-                    <Image source={{ uri: getAvatarUrl(item.avatar) }} style={styles.avatarMini} />
-                  ) : (
-                    <View style={styles.avatarMiniPlaceholder}>
-                      <Feather name="user" size={14} color="#8A95A5" />
-                    </View>
-                  )}
-                  <Text style={styles.tdName} numberOfLines={1}>{item.full_name || item.username}</Text>
-                </View>
-                <Text style={[styles.tdRating, { flex: 1 }]}>{item.elo}</Text>
-                <Text style={[styles.td, { flex: 1, textAlign: 'center' }]}>{item.win_rate}</Text>
+          ListEmptyComponent={
+            isLoading && !refreshing ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#D4FF00" />
               </View>
-            ))
+            ) : (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ color: '#8A95A5', fontSize: 16 }}>Belum ada data peringkat di wilayah ini</Text>
+              </View>
+            )
+          }
+          renderItem={({ item }) => (
+            <View style={styles.row}>
+              <Text style={[styles.tdRank, { flex: 0.5 }]}>{item.rank}</Text>
+              <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center' }}>
+                {item.avatar ? (
+                  <Image source={{ uri: getAvatarUrl(item.avatar) }} style={styles.avatarMini} cachePolicy="memory-disk" />
+                ) : (
+                  <View style={styles.avatarMiniPlaceholder}>
+                    <Feather name="user" size={14} color="#8A95A5" />
+                  </View>
+                )}
+                <Text style={styles.tdName} numberOfLines={1}>{item.full_name || item.username}</Text>
+              </View>
+              <Text style={[styles.tdRating, { flex: 1 }]}>{item.elo}</Text>
+              <Text style={[styles.td, { flex: 1, textAlign: 'center' }]}>{item.win_rate}%</Text>
+            </View>
           )}
-        </ScrollView>
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+        />
       </LinearGradient>
     </SafeAreaView>
   );

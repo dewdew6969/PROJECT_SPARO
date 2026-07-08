@@ -7,3 +7,5 @@ python-jose[cryptography]
 python-multipart
 a2wsgi
 pymysql
+google-generativeai
+pillow

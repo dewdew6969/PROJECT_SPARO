@@ -123,7 +123,21 @@ export default function ProfileScreen({ navigation }) {
         setTempTimeEnd(parts[1]);
       }
     }
-    setSelectionModalVisible(true);
+    
+    // Sembunyikan Edit Profile Modal terlebih dahulu agar Modal Selection bisa diklik di Android
+    if (type !== 'language') {
+      setModalVisible(false);
+      setTimeout(() => setSelectionModalVisible(true), 150);
+    } else {
+      setSelectionModalVisible(true);
+    }
+  };
+
+  const closeSelectionAndReopenEdit = () => {
+    setSelectionModalVisible(false);
+    if (selectionType !== 'language') {
+      setTimeout(() => setModalVisible(true), 150);
+    }
   };
 
   const handleSelectOption = (value) => {
@@ -132,7 +146,7 @@ export default function ProfileScreen({ navigation }) {
     if (selectionType === 'primaryLevel') setPrimaryLevel(value);
     if (selectionType === 'secondaryLevel') setSecondaryLevel(value);
     if (selectionType === 'language') setLanguage(value);
-    setSelectionModalVisible(false);
+    closeSelectionAndReopenEdit();
   };
 
   const toggleDay = (day) => {
@@ -156,12 +170,12 @@ export default function ProfileScreen({ navigation }) {
       return daysOptions.indexOf(a) - daysOptions.indexOf(b);
     });
     setAvailableDays(sortedDays.join(', '));
-    setSelectionModalVisible(false);
+    closeSelectionAndReopenEdit();
   };
 
   const saveTime = () => {
     setAvailableTime(`${tempTimeStart} - ${tempTimeEnd}`);
-    setSelectionModalVisible(false);
+    closeSelectionAndReopenEdit();
   };
 
   const takenUsernames = ['@dewa_permana99', '@alex_sterling', '@johndoe'];
@@ -676,7 +690,7 @@ export default function ProfileScreen({ navigation }) {
                    selectionType.includes('Level') ? t('select_level') : 
                    selectionType === 'days' ? t('select_days') : t('select_time_range')}
                 </Text>
-                <TouchableOpacity onPress={() => setSelectionModalVisible(false)}>
+                <TouchableOpacity onPress={closeSelectionAndReopenEdit}>
                   <Feather name="x" size={24} color="#FFF" />
                 </TouchableOpacity>
               </View>

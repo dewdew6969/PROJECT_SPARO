@@ -245,7 +245,15 @@ const translations = {
     sponsored: 'SPONSORED',
     community: 'COMMUNITY',
     by: 'By',
-    ai_settings_desc: 'Fine-tune the matchmaking algorithm to find your perfect rival.'
+    ai_settings_desc: 'Fine-tune the matchmaking algorithm to find your perfect rival.',
+    confirm_ocr_title: 'Confirm OCR AI',
+    confirm_ocr_msg: 'Are you sure you want to upload this photo? Gemini AI will automatically scan the score, determine the winner, and permanently update the ELO Rating.',
+    ocr_error_msg: 'Failed to process AI:\n',
+    ocr_result_msg: 'AI Detection Result:\nChallenger Score: {c}\nOpponent Score: {o}\n\n{conclusion}\n\nThe match has been automatically completed based on this score. ELO and statistics have been updated.',
+    server_msg: '\n\nServer Message: ',
+    match_completed_title: 'Match Completed',
+    success: 'Success',
+    error_title: 'Error'
   },
   'Bahasa Indonesia': {
     prize_placeholder: 'Masukkan hadiah (contoh: Medali Emas)',
@@ -483,7 +491,15 @@ const translations = {
     sponsored: 'SPONSOR',
     community: 'KOMUNITAS',
     by: 'Oleh',
-    ai_settings_desc: 'Sesuaikan algoritma matchmaking untuk menemukan lawan yang paling tepat.'
+    ai_settings_desc: 'Sesuaikan algoritma matchmaking untuk menemukan lawan yang paling tepat.',
+    confirm_ocr_title: 'Konfirmasi OCR AI',
+    confirm_ocr_msg: 'Apakah Anda yakin ingin mengunggah foto ini? AI Gemini akan otomatis memindai skor, menentukan pemenang, dan memperbarui ELO Rating secara permanen.',
+    ocr_error_msg: 'Gagal memproses AI:\n',
+    ocr_result_msg: 'Hasil Deteksi AI:\nSkor Challenger: {c}\nSkor Opponent: {o}\n\n{conclusion}\n\nPertandingan otomatis diselesaikan berdasarkan skor ini. ELO dan statistik telah diperbarui.',
+    server_msg: '\n\nPesan Server: ',
+    match_completed_title: 'Match Selesai',
+    success: 'Sukses',
+    error_title: 'Error'
   }
 };
 

@@ -1,5 +1,5 @@
 import React, { useContext, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Animated, Modal, Dimensions, RefreshControl, Alert, ImageBackground, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Animated, Modal, Dimensions, RefreshControl, Alert, ImageBackground, LayoutAnimation, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -433,9 +433,9 @@ export default function DashboardScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <Animated.ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
+          <Animated.FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
             style={{ marginHorizontal: -20 }}
             contentContainerStyle={styles.aiScroll}
             snapToInterval={ITEM_SIZE}
@@ -443,18 +443,22 @@ export default function DashboardScreen({ navigation }) {
             scrollEventThrottle={16}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: false } // Disabled native driver to allow shadow/elevation animation
+              { useNativeDriver: true }
             )}
-          >
-            {isLoadingOpponents ? (
-              <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 180 }}>
-                <Text style={{ color: '#8A95A5' }}>Loading opponents...</Text>
-              </View>
-            ) : opponents.length === 0 ? (
-              <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 180 }}>
-                <Text style={{ color: '#8A95A5' }}>No opponents found nearby</Text>
-              </View>
-            ) : opponents.map((match, index) => {
+            data={opponents}
+            keyExtractor={(item) => item.id.toString()}
+            ListEmptyComponent={
+              isLoadingOpponents ? (
+                <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 180 }}>
+                  <Text style={{ color: '#8A95A5' }}>Loading opponents...</Text>
+                </View>
+              ) : (
+                <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 180 }}>
+                  <Text style={{ color: '#8A95A5' }}>No opponents found nearby</Text>
+                </View>
+              )
+            }
+            renderItem={({ item: match, index }) => {
               const rank = { 'BEGINNER': 0, 'INTERMEDIATE': 1, 'ADVANCED': 2, 'EXPERT': 3 };
               const highestLevel = match.primary_level || 'BEGINNER'; // fallback
               const opponentDistance = match.distance !== undefined && match.distance !== null ? `${match.distance} km` : 'Unknown';
@@ -475,16 +479,6 @@ export default function DashboardScreen({ navigation }) {
                 outputRange: [0.3, 1, 0.3], // Memudar saat digeser
                 extrapolate: 'clamp' });
 
-              const shadowOpacity = scrollX.interpolate({
-                inputRange,
-                outputRange: [0, 0.4, 0], // Shadow hilang perlahan saat digeser
-                extrapolate: 'clamp' });
-
-              const elevation = scrollX.interpolate({
-                inputRange,
-                outputRange: [0, 15, 0], // Untuk efek shadow di Android
-                extrapolate: 'clamp' });
-
               return (
                 <Animated.View 
                   key={match.id} 
@@ -493,9 +487,7 @@ export default function DashboardScreen({ navigation }) {
                     { 
                       width: CARD_WIDTH,
                       transform: [{ scale }], 
-                      opacity,
-                      shadowOpacity,
-                      elevation
+                      opacity
                     }
                   ]}
                 >
@@ -559,8 +551,11 @@ export default function DashboardScreen({ navigation }) {
                   </View>
                 </Animated.View>
               );
-            })}
-          </Animated.ScrollView>
+            }}
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={3}
+          />
 
           {/* Upcoming Tournaments */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 25, marginBottom: 15 }}>
@@ -574,16 +569,24 @@ export default function DashboardScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tournamentsScroll}>
-            {isLoadingTournaments ? (
-              <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 130 }}>
-                 <Text style={{ color: '#8A95A5' }}>Loading tournaments...</Text>
-              </View>
-            ) : tournaments.length === 0 ? (
-              <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 130 }}>
-                 <Text style={{ color: '#8A95A5' }}>No upcoming tournaments</Text>
-              </View>
-            ) : tournaments.map((tourney, index) => {
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tournamentsScroll}
+            data={tournaments}
+            keyExtractor={(tourney, index) => (tourney.id ? tourney.id.toString() : index.toString())}
+            ListEmptyComponent={
+              isLoadingTournaments ? (
+                <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 130 }}>
+                   <Text style={{ color: '#8A95A5' }}>Loading tournaments...</Text>
+                </View>
+              ) : (
+                <View style={{ width: CARD_WIDTH, alignItems: 'center', justifyContent: 'center', height: 130 }}>
+                   <Text style={{ color: '#8A95A5' }}>No upcoming tournaments</Text>
+                </View>
+              )
+            }
+            renderItem={({ item: tourney, index }) => {
               const title = tourney.title || tourney.name || 'Sparo Tournament';
               const organizer = tourney.organizer || 'Sparo Official';
               
@@ -603,7 +606,6 @@ export default function DashboardScreen({ navigation }) {
               const maxParticipants = tourney.max_participants || 0;
               const isFull = maxParticipants <= 0 && !isRegistered;
               
-              // Tema warna dibuat bervariasi otomatis berdasarkan urutan index
               const colorThemes = [
                 { bgColor: '#D4FF00', textColor: '#000', icon: 'award' },
                 { bgColor: '#A0BEFF', textColor: '#000', icon: 'briefcase' },
@@ -635,24 +637,7 @@ export default function DashboardScreen({ navigation }) {
                 <TouchableOpacity 
                   key={tourney.id || index} 
                   style={[styles.tournamentCard, { borderColor: theme.bgColor + '40', shadowColor: theme.bgColor, opacity: (isRegistered || isFull) ? 0.7 : 1 }]} 
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (isRegistered) {
-                      setGenericAlertContent({ 
-                        title: t('notification') || 'Pemberitahuan', 
-                        message: t('already_registered') || 'Anda sudah terdaftar di turnamen ini!' 
-                      });
-                      setGenericAlertVisible(true);
-                    } else if (isFull) {
-                      setGenericAlertContent({ 
-                        title: t('notification') || 'Pemberitahuan', 
-                        message: t('tournament_full') || 'Maaf, slot untuk turnamen ini sudah penuh!' 
-                      });
-                      setGenericAlertVisible(true);
-                    } else {
-                      handleRegisterTournament(tourney.id, title);
-                    }
-                  }}
+                  activeOpacity={1}
                   onLongPress={() => handleDeleteTournament(tourney.id, title)}
                 >
                   {hasImage ? (
@@ -713,17 +698,39 @@ export default function DashboardScreen({ navigation }) {
                         <Text style={{ color: '#8A95A5', fontSize: 9, letterSpacing: 0.5, marginBottom: 2 }}>{t('prize')?.toUpperCase()}</Text>
                         <Text style={styles.tournamentPrize}>{prize}</Text>
                       </View>
-                      <View style={[styles.registerBtn, { backgroundColor: (isRegistered || isFull) ? '#2D3748' : theme.bgColor }]}>
-                        <Text style={[styles.tournamentRegister, { color: (isRegistered || isFull) ? '#8A95A5' : theme.textColor }]}>
+                      <TouchableOpacity 
+                        style={[styles.registerBtn, { backgroundColor: (isRegistered || isFull) ? '#2D3748' : theme.bgColor }]}
+                        onPress={() => {
+                          if (isRegistered) {
+                            setGenericAlertContent({ 
+                              title: t('notification') || 'Pemberitahuan', 
+                              message: t('already_registered') || 'Anda sudah terdaftar di turnamen ini!' 
+                            });
+                            setGenericAlertVisible(true);
+                          } else if (isFull) {
+                            setGenericAlertContent({ 
+                              title: t('notification') || 'Pemberitahuan', 
+                              message: t('tournament_full') || 'Maaf, slot untuk turnamen ini sudah penuh!' 
+                            });
+                            setGenericAlertVisible(true);
+                          } else {
+                            handleRegisterTournament(tourney.id, title);
+                          }
+                        }}
+                      >
+                        <Text style={[styles.registerBtnText, { color: (isRegistered || isFull) ? '#8A95A5' : theme.textColor }]}>
                           {isRegistered ? 'REGISTERED' : (isFull ? 'SOLD OUT' : t('register').toUpperCase())} {!isRegistered && !isFull && <Feather name="arrow-right" size={12} />}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </TouchableOpacity>
               );
-            })}
-          </ScrollView>
+            }}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+          />
 
           <View style={{ height: 20 }} />
         </Animated.ScrollView>

@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Platform, StatusBar, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Platform, StatusBar, Modal, Animated, FlatList } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -324,124 +324,135 @@ export default function FindOpponentScreen({ navigation }) {
           </ScrollView>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>{t('recommended')}</Text>
-              <Text style={styles.sectionSubtitle}>{filteredOpponents.length} {t('available_nearby')}</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.sortBtn} 
-              onPress={() => {
-                // Cycle sort: rating -> distance -> sportsmanship -> rating
-                if (sortBy === 'rating') {
-                  setSortBy('distance');
-                } else if (sortBy === 'distance') {
-                  setSortBy('sportsmanship');
-                } else {
-                  setSortBy('rating');
-                }
-              }}
-            >
-              {sortBy === 'rating' ? (
+        <FlatList
+          data={filteredOpponents}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>{t('recommended')}</Text>
+                  <Text style={styles.sectionSubtitle}>{filteredOpponents.length} {t('available_nearby')}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.sortBtn} 
+                  onPress={() => {
+                    // Cycle sort: rating -> distance -> sportsmanship -> rating
+                    if (sortBy === 'rating') {
+                      setSortBy('distance');
+                    } else if (sortBy === 'distance') {
+                      setSortBy('sportsmanship');
+                    } else {
+                      setSortBy('rating');
+                    }
+                  }}
+                >
+                  {sortBy === 'rating' ? (
+                    <>
+                      <Feather name="bar-chart-2" size={14} color="#D4FF00" />
+                      <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('elo_rating')}</Text>
+                    </>
+                  ) : sortBy === 'distance' ? (
+                    <>
+                      <Feather name="map-pin" size={14} color="#D4FF00" />
+                      <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('distance').toUpperCase()}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="percent" size={14} color="#D4FF00" />
+                      <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('win_rate')}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {isLoading && (
                 <>
-                  <Feather name="bar-chart-2" size={14} color="#D4FF00" />
-                  <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('elo_rating')}</Text>
-                </>
-              ) : sortBy === 'distance' ? (
-                <>
-                  <Feather name="map-pin" size={14} color="#D4FF00" />
-                  <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('distance').toUpperCase()}</Text>
-                </>
-              ) : (
-                <>
-                  <Feather name="percent" size={14} color="#D4FF00" />
-                  <Text style={[styles.sortText, { color: '#D4FF00' }]}>{t('win_rate')}</Text>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
                 </>
               )}
-            </TouchableOpacity>
-          </View>
-
-          {isLoading ? (
-            <>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
             </>
-          ) : filteredOpponents.length === 0 ? (
-            <View style={{ alignItems: 'center', marginTop: 60 }}>
-              <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#1C2433', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
-                 <MaterialCommunityIcons name="account-search" size={60} color="#2D3748" />
-              </View>
-              <Text style={{ color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>{t('no_opponents') === 'no_opponents' ? 'Belum Ada Lawan' : t('no_opponents')}</Text>
-              <Text style={{ color: '#8A95A5', textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
-                Maaf, belum ada lawan untuk {t('sport_' + activeSport.toLowerCase().replace(/ /g, '_'))} dengan kriteria yang Anda cari saat ini.
-              </Text>
-            </View>
-          ) : (
-            filteredOpponents.map((item) => (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  
-                  <View style={styles.avatarContainer}>
-                    <Image 
-                      source={{ uri: item.avatar }} 
-                      style={styles.avatarImage} 
-                      cachePolicy="memory-disk"
-                      transition={0}
-                    />
-                    {item.isPro && (
-                      <View style={styles.proBadge}>
-                        <Text style={styles.proBadgeText}>PRO</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={styles.cardInfo}>
-                    <View style={styles.nameRow}>
-                      <Text style={styles.name}>{item.name}</Text>
-                      <View style={styles.ratingBox}>
-                        <Text style={styles.ratingVal}>{item.elo}</Text>
-                        <Text style={styles.ratingLabel}>{t('elo_rating')}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.levelRow}>
-                      <View style={styles.levelBadge}>
-                        <Text style={styles.levelText}>{t(item.level.toLowerCase()).toUpperCase()}</Text>
-                      </View>
-                      <Text style={styles.distanceText}> • {item.distance} {t('away')}</Text>
-                    </View>
-
-                    <View style={styles.scoreRow}>
-                      <Feather name="percent" size={12} color="#D4FF00" style={{ marginRight: 4 }} />
-                      <Text style={styles.scoreVal}>{item.winRate}%</Text>
-                      <Text style={styles.scoreLabel}> {t('win_rate')}</Text>
-                    </View>
-                  </View>
+          }
+          ListEmptyComponent={
+            !isLoading && filteredOpponents.length === 0 ? (
+              <View style={{ alignItems: 'center', marginTop: 60 }}>
+                <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#1C2433', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                   <MaterialCommunityIcons name="account-search" size={60} color="#2D3748" />
                 </View>
+                <Text style={{ color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>{t('no_opponents') === 'no_opponents' ? 'Belum Ada Lawan' : t('no_opponents')}</Text>
+                <Text style={{ color: '#8A95A5', textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
+                  Maaf, belum ada lawan untuk {t('sport_' + activeSport.toLowerCase().replace(/ /g, '_'))} dengan kriteria yang Anda cari saat ini.
+                </Text>
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardTop}>
                 
-                <View style={styles.cardActions}>
-                  <TouchableOpacity 
-                    style={styles.btnOutline}
-                    onPress={() => navigation.navigate('OpponentProfile', { opponent: item })}
-                  >
-                    <Text style={styles.btnTextOutline}>{t('view_profile')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.btnPrimary}
-                    onPress={() => navigation.navigate('CreateChallenge', { opponent: item })}
-                  >
-                    <Text style={styles.btnTextPrimary}>{t('send_challenge')}</Text>
-                  </TouchableOpacity>
+                <View style={styles.avatarContainer}>
+                  <Image 
+                    source={{ uri: item.avatar }} 
+                    style={styles.avatarImage} 
+                    cachePolicy="memory-disk"
+                    transition={0}
+                  />
+                  {item.isPro && (
+                    <View style={styles.proBadge}>
+                      <Text style={styles.proBadgeText}>PRO</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.cardInfo}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name}>{item.name}</Text>
+                    <View style={styles.ratingBox}>
+                      <Text style={styles.ratingVal}>{item.elo}</Text>
+                      <Text style={styles.ratingLabel}>{t('elo_rating')}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.levelRow}>
+                    <View style={styles.levelBadge}>
+                      <Text style={styles.levelText}>{t(item.level.toLowerCase()).toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.distanceText}> • {item.distance} {t('away')}</Text>
+                  </View>
+
+                  <View style={styles.scoreRow}>
+                    <Feather name="percent" size={12} color="#D4FF00" style={{ marginRight: 4 }} />
+                    <Text style={styles.scoreVal}>{item.winRate}%</Text>
+                    <Text style={styles.scoreLabel}> {t('win_rate')}</Text>
+                  </View>
                 </View>
               </View>
-            ))
+              
+              <View style={styles.cardActions}>
+                <TouchableOpacity 
+                  style={styles.btnOutline}
+                  onPress={() => navigation.navigate('OpponentProfile', { opponent: item })}
+                >
+                  <Text style={styles.btnTextOutline}>{t('view_profile')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.btnPrimary}
+                  onPress={() => navigation.navigate('CreateChallenge', { opponent: item })}
+                >
+                  <Text style={styles.btnTextPrimary}>{t('send_challenge')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
-          
-          <View style={{ height: 60 }} />
-        </ScrollView>
+          ListFooterComponent={<View style={{ height: 60 }} />}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+        />
 
         {/* All Sports Modal */}
         <Modal

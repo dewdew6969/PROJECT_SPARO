@@ -14,10 +14,19 @@ const getSportIcon = (sportName) => {
   if (!sportName) return 'badminton';
   const s = String(sportName).toLowerCase();
   if (s.includes('basket')) return 'basketball';
+  if (s.includes('mini soccer')) return 'soccer-field';
   if (s.includes('futsal') || s.includes('soccer') || s.includes('football') || s.includes('bola')) return 'soccer';
   if (s.includes('tennis') || s.includes('tenis')) return 'tennis';
   if (s.includes('ping') || s.includes('table')) return 'table-tennis';
   if (s.includes('voli') || s.includes('volley')) return 'volleyball';
+  if (s.includes('billiard')) return 'billiards';
+  if (s.includes('e-sport') || s.includes('esport') || s.includes('game')) return 'gamepad-variant';
+  if (s.includes('chess') || s.includes('catur')) return 'chess-knight';
+  if (s.includes('golf')) return 'golf';
+  if (s.includes('run') || s.includes('lari')) return 'run';
+  if (s.includes('cycl') || s.includes('sepeda') || s.includes('bike')) return 'bike';
+  if (s.includes('swim') || s.includes('renang')) return 'swim';
+  if (s.includes('gym') || s.includes('fitness')) return 'dumbbell';
   return 'badminton';
 };
 
@@ -98,8 +107,8 @@ export default function OpponentProfileScreen({ navigation, route }) {
     // Initial fetch
     fetchOpponentData();
 
-    // Auto-polling setiap 2 detik sesuai permintaan user (realtime update)
-    intervalId = setInterval(fetchOpponentData, 2000);
+    // Auto-polling setiap 3 detik (hemat baterai, performa lebih baik dari sebelumnya)
+    intervalId = setInterval(fetchOpponentData, 3000);
 
     return () => clearInterval(intervalId);
   }, [opponent.id]);

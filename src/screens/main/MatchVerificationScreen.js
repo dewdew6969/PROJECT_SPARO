@@ -7,11 +7,22 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import useAppStore from '../../store/useAppStore';
 import CustomAlert from '../../components/CustomAlert';
+import CustomConfirm from '../../components/CustomConfirm';
 
 export default function MatchVerificationScreen({ route, navigation }) {
     const { t, language } = useAppStore();
+    const profile = useAppStore((state) => state.profile);
+    const updateProfile = useAppStore((state) => state.updateProfile);
     const { challenge, userId } = route?.params || {};
+    const currentUserId = userId || profile?.id;
     const insets = useSafeAreaInsets();
+
+    const myName = profile?.full_name || profile?.username || 'You';
+    const enemyName = challenge?.name || 'Opponent';
+    
+    // If isIncoming is true, I am the opponent, so the challenger is the enemy.
+    const displayChallengerName = challenge?.isIncoming ? enemyName : myName;
+    const displayOpponentName = challenge?.isIncoming ? myName : enemyName;
 
     const [location, setLocation] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -21,9 +32,51 @@ export default function MatchVerificationScreen({ route, navigation }) {
     const [myScore, setMyScore] = useState('');
     const [opponentScore, setOpponentScore] = useState('');
     const [isConflict, setIsConflict] = useState(false);
+    const [matchStatus, setMatchStatus] = useState(challenge?.status || "ACCEPTED");
+    const [hasSubmittedScore, setHasSubmittedScore] = useState(false);
+    
+    // Realtime Polling
+    useEffect(() => {
+        let isActive = true;
+        let timeoutId = null;
+
+        const poll = async () => {
+            if (!isActive) return;
+            try {
+                const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+                const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}?t=${new Date().getTime()}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status && data.status !== matchStatus) {
+                        setMatchStatus(data.status);
+                        if (data.status === 'conflict') setIsConflict(true);
+                    }
+                }
+            } catch (error) {
+                console.log("Polling error:", error);
+            }
+            if (isActive) {
+                timeoutId = setTimeout(poll, 1000);
+            }
+        };
+
+        if (matchStatus === 'awaiting_opponent_verification' || matchStatus === 'awaiting_challenger_verification') {
+            poll();
+        }
+
+        return () => {
+            isActive = false;
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [matchStatus]);
+
     const [proofImage, setProofImage] = useState(null);
     const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', onCloseAction: null });
+    
+    // States for Upload Confirmation
+    const [confirmUploadVisible, setConfirmUploadVisible] = useState(false);
+    const [selectedImageUri, setSelectedImageUri] = useState(null);
 
     const showAlert = (title, message, onCloseAction = null) => {
         setAlertConfig({ visible: true, title, message, onCloseAction });
@@ -49,7 +102,7 @@ export default function MatchVerificationScreen({ route, navigation }) {
             setLocation(loc);
             
             const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/checkin?user_id=${userId || 1}&lat=${loc.coords.latitude}&lon=${loc.coords.longitude}`, {
+            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/checkin?user_id=${currentUserId || 1}&lat=${loc.coords.latitude}&lon=${loc.coords.longitude}`, {
                 method: 'POST'
             });
 
@@ -74,7 +127,7 @@ export default function MatchVerificationScreen({ route, navigation }) {
         }
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/submit-score?user_id=${userId || 1}&my_score=${myScore}&opponent_score=${opponentScore}`, {
+            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/submit-score?user_id=${currentUserId || 1}&my_score=${myScore}&opponent_score=${opponentScore}`, {
                 method: 'POST'
             });
 
@@ -82,6 +135,9 @@ export default function MatchVerificationScreen({ route, navigation }) {
                 const errData = await response.json();
                 throw new Error(errData.detail || "Gagal mengirim skor");
             }
+            const data = await response.json();
+            setMatchStatus(data.challenge.status);
+            setHasSubmittedScore(true);
             showAlert("Sukses", "Skor berhasil dikirim. Menunggu konfirmasi dari lawan...");
         } catch (error) {
             showAlert("Error", error.message);
@@ -91,7 +147,7 @@ export default function MatchVerificationScreen({ route, navigation }) {
     const handleConfirmScore = async (agreed) => {
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
-            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/confirm-score?user_id=${userId || 1}&is_agreed=${agreed}`, {
+            const response = await fetch(`${API_URL}/challenges/${challenge?.id || 1}/confirm-score?user_id=${currentUserId || 1}&is_agreed=${agreed}`, {
                 method: 'POST'
             });
 
@@ -101,12 +157,23 @@ export default function MatchVerificationScreen({ route, navigation }) {
             }
 
             if (agreed) {
-                showAlert("Match Selesai", "Pertandingan telah terverifikasi. ELO Rating Anda akan diperbarui oleh sistem.", () => navigation.goBack());
+                setMatchStatus("COMPLETED");
+                showAlert("Match Selesai", "Pertandingan telah terverifikasi. ELO Rating Anda akan diperbarui oleh sistem.", () => {
+                    if (data.stats) {
+                        const myStats = data.stats.challenger?.id === Number(currentUserId) ? data.stats.challenger : data.stats.opponent?.id === Number(currentUserId) ? data.stats.opponent : null;
+                        if (myStats) {
+                            updateProfile({ elo: myStats.elo, wins: myStats.wins, losses: myStats.losses, matches: myStats.matches });
+                        }
+                    }
+                    navigation.navigate('Main', { screen: 'Home' });
+                });
             } else {
                 setIsConflict(true);
+                setMatchStatus("conflict");
+                showAlert("Konflik Skor", "Skor tidak disetujui. Silakan unggah bukti hasil pertandingan.");
             }
         } catch (error) {
-            Alert.alert("Error", error.message);
+            showAlert("Error", error.message);
         }
     };
 
@@ -140,17 +207,36 @@ export default function MatchVerificationScreen({ route, navigation }) {
             
             setProofImage(uri);
             
-            // Format respons dari server untuk ditampilkan ke user
             let resultMsg = "Foto bukti berhasil diunggah dan diproses oleh server.";
-            if (data.ocr_result || data.extracted_score) {
-                resultMsg += `\n\nHasil Deteksi AI:\n${JSON.stringify(data.ocr_result || data.extracted_score, null, 2)}`;
-            } else if (data.message) {
-                resultMsg += `\n\nPesan Server: ${data.message}`;
-            } else if (Object.keys(data).length > 0) {
-                resultMsg += `\n\nData Mentah Server:\n${JSON.stringify(data, null, 2)}`;
+            if (data.ocr_result && data.ocr_result.error) {
+                resultMsg = `${t('ocr_error_msg')}${data.ocr_result.error}`;
+                showAlert(t('error_title'), resultMsg);
+            } else if (data.ocr_result || data.extracted_score) {
+                const aiData = data.ocr_result || data.extracted_score;
+                resultMsg = t('ocr_result_msg').replace('{c}', aiData.challenger).replace('{o}', aiData.opponent).replace('{conclusion}', aiData.conclusion || '');
+                showAlert(t('match_completed_title'), resultMsg, () => {
+                    setMatchStatus("COMPLETED");
+                    if (data.stats) {
+                        const myStats = data.stats.challenger?.id === Number(currentUserId) ? data.stats.challenger : data.stats.opponent?.id === Number(currentUserId) ? data.stats.opponent : null;
+                        if (myStats) {
+                            updateProfile({ elo: myStats.elo, wins: myStats.wins, losses: myStats.losses, matches: myStats.matches });
+                        }
+                    }
+                    navigation.navigate('Main', { screen: 'Home' });
+                });
+            } else {
+                if (data.message) resultMsg += `${t('server_msg')}${data.message}`;
+                showAlert(t('success'), resultMsg, () => {
+                    setMatchStatus("COMPLETED");
+                    if (data.stats) {
+                        const myStats = data.stats.challenger?.id === Number(currentUserId) ? data.stats.challenger : data.stats.opponent?.id === Number(currentUserId) ? data.stats.opponent : null;
+                        if (myStats) {
+                            updateProfile({ elo: myStats.elo, wins: myStats.wins, losses: myStats.losses, matches: myStats.matches });
+                        }
+                    }
+                    navigation.navigate('Main', { screen: 'Home' });
+                });
             }
-
-            showAlert("Sukses", resultMsg);
         } catch (error) {
             showAlert("Error", error.message);
         } finally {
@@ -177,6 +263,53 @@ export default function MatchVerificationScreen({ route, navigation }) {
                             {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>{t('checkin_now')}</Text>}
                         </TouchableOpacity>
                     </View>
+                ) : matchStatus === 'COMPLETED' ? (
+                    <View style={styles.card}>
+                        <MaterialCommunityIcons name="check-decagram" size={64} color="#D4FF00" style={styles.iconCenter} />
+                        <Text style={styles.title}>Match Verified</Text>
+                        <Text style={styles.desc}>Pertandingan selesai dan ELO telah diperbarui.</Text>
+                    </View>
+                ) : matchStatus === 'awaiting_opponent_verification' || matchStatus === 'awaiting_challenger_verification' ? (
+                    <View style={styles.card}>
+                        { hasSubmittedScore || 
+                          (matchStatus === 'awaiting_opponent_verification' && Number(challenge?.challenger_id) === Number(currentUserId)) ||
+                          (matchStatus === 'awaiting_challenger_verification' && Number(challenge?.opponent_id) === Number(currentUserId)) ? (
+                            <>
+                                <MaterialCommunityIcons name="clock-outline" size={64} color="#D4FF00" style={styles.iconCenter} />
+                                <Text style={styles.title}>Menunggu Konfirmasi</Text>
+                                <Text style={styles.desc}>Menunggu lawan mengkonfirmasi skor yang Anda masukkan.</Text>
+                            </>
+                        ) : (
+                            <>
+                                <View style={styles.scoreRow}>
+                                    <View style={styles.scoreInputContainer}>
+                                        <Text style={styles.scoreLabel} numberOfLines={1}>{displayChallengerName}</Text>
+                                        <View style={[styles.scoreInput, { justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}>{challenge?.challenger_score ?? '0'}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.vsText}>VS</Text>
+                                    <View style={styles.scoreInputContainer}>
+                                        <Text style={styles.scoreLabel} numberOfLines={1}>{displayOpponentName}</Text>
+                                        <View style={[styles.scoreInput, { justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}>{challenge?.opponent_score ?? '0'}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <Text style={styles.title}>{t('opponent_confirmation') || 'Konfirmasi Skor'}</Text>
+                                <Text style={styles.desc}>{t('opponent_confirmation_desc') || 'Lawan telah memasukkan skor. Apakah Anda setuju?'}</Text>
+                                
+                                <View style={styles.actionRow}>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.agreeBtn]} onPress={() => handleConfirmScore(true)}>
+                                        <Text style={styles.actionBtnText}>{t('agree') || 'Setuju'}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.disagreeBtn]} onPress={() => handleConfirmScore(false)}>
+                                        <Text style={styles.actionBtnText}>{t('disagree') || 'Tidak Setuju'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        )}
+                    </View>
                 ) : !isConflict ? (
                     <View style={styles.card}>
                         <MaterialCommunityIcons name="scoreboard" size={64} color="#D4FF00" style={styles.iconCenter} />
@@ -197,21 +330,6 @@ export default function MatchVerificationScreen({ route, navigation }) {
                         <TouchableOpacity style={styles.primaryBtn} onPress={handleSubmitScore}>
                             <Text style={styles.primaryBtnText}>{t('submit_score_btn')}</Text>
                         </TouchableOpacity>
-
-                        <View style={styles.divider} />
-                        
-                        {/* Simulasi UI untuk Lawan Mengkonfirmasi */}
-                        <Text style={styles.subtitle}>{t('opponent_confirmation')}</Text>
-                        <Text style={styles.desc}>{t('opponent_confirmation_desc')}</Text>
-                        
-                        <View style={styles.actionRow}>
-                            <TouchableOpacity style={[styles.actionBtn, styles.agreeBtn]} onPress={() => handleConfirmScore(true)}>
-                                <Text style={styles.actionBtnText}>{t('agree')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.actionBtn, styles.disagreeBtn]} onPress={() => handleConfirmScore(false)}>
-                                <Text style={styles.actionBtnText}>{t('disagree')}</Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
                 ) : (
                     <View style={styles.card}>
@@ -237,9 +355,9 @@ export default function MatchVerificationScreen({ route, navigation }) {
                             <Text style={styles.actionSheetTitle}>Unggah Foto Bukti Skor</Text>
                         </View>
                         <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
-                            setImagePickerModalVisible(false);
                             const { status } = await ImagePicker.requestCameraPermissionsAsync();
                             if (status !== 'granted') {
+                                setImagePickerModalVisible(false);
                                 showAlert('Izin Ditolak', 'Izin kamera dibutuhkan untuk mengambil foto skor.');
                                 return;
                             }
@@ -248,8 +366,10 @@ export default function MatchVerificationScreen({ route, navigation }) {
                                 allowsEditing: true,
                                 quality: 0.8,
                             });
+                            setImagePickerModalVisible(false);
                             if (!result.canceled) {
-                                uploadImageToBackend(result.assets[0].uri);
+                                setSelectedImageUri(result.assets[0].uri);
+                                setConfirmUploadVisible(true);
                             }
                         }}>
                             <MaterialCommunityIcons name="camera" size={24} color="#FFF" style={{ marginRight: 15 }} />
@@ -257,14 +377,15 @@ export default function MatchVerificationScreen({ route, navigation }) {
                         </TouchableOpacity>
                         
                         <TouchableOpacity style={styles.actionSheetItem} onPress={async () => {
-                            setImagePickerModalVisible(false);
                             let result = await ImagePicker.launchImageLibraryAsync({
                                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                                 allowsEditing: true,
                                 quality: 0.8,
                             });
+                            setImagePickerModalVisible(false);
                             if (!result.canceled) {
-                                uploadImageToBackend(result.assets[0].uri);
+                                setSelectedImageUri(result.assets[0].uri);
+                                setConfirmUploadVisible(true);
                             }
                         }}>
                             <MaterialCommunityIcons name="image" size={24} color="#FFF" style={{ marginRight: 15 }} />
@@ -274,6 +395,17 @@ export default function MatchVerificationScreen({ route, navigation }) {
                 </TouchableOpacity>
             </Modal>
 
+            <CustomConfirm 
+                visible={confirmUploadVisible}
+                title={t('confirm_ocr_title')}
+                message={t('confirm_ocr_msg')}
+                onConfirm={() => {
+                    setConfirmUploadVisible(false);
+                    if (selectedImageUri) uploadImageToBackend(selectedImageUri);
+                }}
+                onCancel={() => setConfirmUploadVisible(false)}
+            />
+            
             <CustomAlert 
                 visible={alertConfig.visible}
                 title={alertConfig.title}

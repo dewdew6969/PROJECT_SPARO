@@ -43,8 +43,3 @@ example
 /ios
 /android
 
-# scratch files
-*.log
-*_fixed.py
-test_api.py
-*.sql
